@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
-import { Check, ChevronRight, Filter, Grid, Layers, Search, Sliders, Trash2, User, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { ESTADOS_PROSPECCION, ORIGENES, PAISES, SECTORES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
@@ -10,13 +10,59 @@ const isLiquidatedLead = (record) => record.estadoProspeccion === 'Liquidado';
 const isDiscardedLead = (record) => record.estadoProspeccion === 'Descartado';
 const isArchivedLead = (record) => (record.estadoProspeccion === 'Archivado' || record.isArchived) && !isDiscardedLead(record) && !isLiquidatedLead(record);
 const countsAsProspecting = (record) => record.estadoProspeccion !== 'Nuevo' && !isDiscardedLead(record) && !isLiquidatedLead(record);
+const CSV_FIELD_OPTIONS = [
+  { key: 'id', label: 'ID', getValue: (record) => record.id || '' },
+  { key: 'nombre', label: 'Nombre', getValue: (record) => record.nombre || '' },
+  { key: 'pais', label: 'Pais', getValue: (record) => record.pais || '' },
+  { key: 'numero', label: 'Telefono', getValue: (record) => record.numero || '' },
+  { key: 'correo', label: 'Correo', getValue: (record) => record.correo || record.email || '' },
+  { key: 'sector', label: 'Sector', getValue: (record, sectorNameById) => sectorNameById[record.sector] || record.sector || '' },
+  { key: 'subsector', label: 'Subsector', getValue: (record) => record.subsector || '' },
+  { key: 'origen', label: 'Origen', getValue: (record) => record.origen || '' },
+  { key: 'fechaIngreso', label: 'FechaIngreso', getValue: (record) => record.fechaIngreso || '' },
+  { key: 'categoria', label: 'Categoria', getValue: (record) => record.categoria || '' },
+  { key: 'estadoProspeccion', label: 'Estado', getValue: (record) => record.estadoProspeccion || '' },
+  { key: 'responsable', label: 'Responsable', getValue: (record) => record.responsable || '' },
+  { key: 'workspaceId', label: 'WorkspaceId', getValue: (record) => record.workspaceId || '' },
+  { key: 'mensajeEnviado', label: 'MensajeEnviado', getValue: (record) => (record.mensajeEnviado ? 'Sí' : 'No') },
+  { key: 'notes', label: 'Notas', getValue: (record) => record.notes || record.nota || '' },
+];
+const DEFAULT_CSV_FIELD_KEYS = CSV_FIELD_OPTIONS.map((field) => field.key);
+
+const escapeCsvCell = (value) => {
+  const stringValue = value == null ? '' : String(value);
+  if (/[",\n]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+  return stringValue;
+};
+
+const downloadCsvFile = (filename, headers, rows) => {
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map(escapeCsvCell).join(','))
+    .join('\n');
+
+  const blob = new Blob([`\uFEFF${csvContent}`], {
+    type: 'text/csv;charset=utf-8;',
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
   const [showFilters, setShowFilters] = useState(false);
+  const [showExportPanel, setShowExportPanel] = useState(false);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
   const [selectedDuplicateIds, setSelectedDuplicateIds] = useState([]);
   const [confirmDuplicateAction, setConfirmDuplicateAction] = useState(null);
   const [confirmDirectoryAction, setConfirmDirectoryAction] = useState(null);
+  const [confirmCsvDownload, setConfirmCsvDownload] = useState(null);
   const [directoryTab, setDirectoryTab] = useState('nuevos');
   const [filters, setFilters] = useState({
     pais: 'ALL',
@@ -32,6 +78,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   const [selectionScopeKey, setSelectionScopeKey] = useState('init');
   const [currentPage, setCurrentPage] = useState(1);
   const [archiveSubtab, setArchiveSubtab] = useState('archivados');
+  const [selectedCsvFields, setSelectedCsvFields] = useState(DEFAULT_CSV_FIELD_KEYS);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const sectorNameById = useMemo(() => Object.fromEntries(SECTORES.map((sector) => [sector.id, sector.nombre])), []);
   const sharedSourceIds = useMemo(
@@ -50,10 +97,25 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
 
   const myDuplicateRecords = useMemo(() => duplicateRecords || [], [duplicateRecords]);
 
+  const tabScopedRecords = useMemo(() => {
+    return workspaceRecords.filter((record) => {
+      const isLeadDiscarded = isDiscardedLead(record);
+      const isLeadArchivedRecord = isArchivedLead(record);
+      const isSharedRecord = Boolean(record.isShared) || sharedSourceIds.has(record.id);
+      return (
+        directoryTab === 'nuevos'
+          ? (!isLeadArchivedRecord && !isLeadDiscarded && !isSharedRecord)
+          : directoryTab === 'archivados'
+            ? (archiveSubtab === 'compartidos' ? isSharedRecord : isLeadArchivedRecord && !isSharedRecord)
+            : isLeadDiscarded
+      );
+    });
+  }, [archiveSubtab, directoryTab, sharedSourceIds, workspaceRecords]);
+
   const filteredRecords = useMemo(() => {
     const searchLower = deferredSearchTerm.toLowerCase();
 
-    return workspaceRecords.filter((record) => {
+    return tabScopedRecords.filter((record) => {
       const sectorName = sectorNameById[record.sector] || '';
       const matchesSearch =
         record.nombre.toLowerCase().includes(searchLower) ||
@@ -69,23 +131,12 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
       const matchesOrigen = filters.origen === 'ALL' || record.origen === filters.origen;
       const matchesMensaje = filters.mensaje === 'ALL' || (filters.mensaje === 'ENVIADO' ? record.mensajeEnviado : !record.mensajeEnviado);
       const matchesResponsable = filters.responsable === 'ALL' || (record.responsable || 'Sin Asignar') === filters.responsable;
-
       const isProspecting = countsAsProspecting(record);
       const matchesEspacio = filters.espacio === 'ALL' || (filters.espacio === 'IN' ? isProspecting : !isProspecting);
 
-      const isLeadDiscarded = isDiscardedLead(record);
-      const isLeadArchivedRecord = isArchivedLead(record);
-      const isSharedRecord = Boolean(record.isShared) || sharedSourceIds.has(record.id);
-      const matchesTab =
-        directoryTab === 'nuevos'
-          ? (!isLeadArchivedRecord && !isLeadDiscarded && !isSharedRecord)
-          : directoryTab === 'archivados'
-            ? (archiveSubtab === 'compartidos' ? isSharedRecord : isLeadArchivedRecord && !isSharedRecord)
-            : isLeadDiscarded;
-
-      return matchesSearch && matchesPais && matchesCategoria && matchesEstado && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio && matchesTab;
+      return matchesSearch && matchesPais && matchesCategoria && matchesEstado && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio;
     });
-  }, [archiveSubtab, deferredSearchTerm, directoryTab, filters, globalSectorFilter, sectorNameById, sharedSourceIds, workspaceRecords]);
+  }, [deferredSearchTerm, filters, globalSectorFilter, sectorNameById, tabScopedRecords]);
   const displayRecords = filteredRecords;
 
   const localTotalPages = Math.max(1, Math.ceil(displayRecords.length / DIRECTORY_PAGE_SIZE));
@@ -122,6 +173,49 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   };
   const bulkActionLabel = directoryTab === 'descartados' ? 'Liquidar' : 'Eliminar';
   const isDuplicatesModalVisible = showDuplicatesModal && myDuplicateRecords.length > 0;
+  const selectedRecordsForExport = useMemo(
+    () => displayRecords.filter((record) => effectiveSelectedIds.includes(record.id)),
+    [displayRecords, effectiveSelectedIds],
+  );
+
+  const currentTabLabel = useMemo(() => {
+    if (directoryTab === 'nuevos') return t('dir_tab_new');
+    if (directoryTab === 'archivados') return archiveSubtab === 'compartidos' ? 'Compartidos' : t('dir_tab_archived');
+    return t('dir_tab_discarded');
+  }, [archiveSubtab, directoryTab, t]);
+  const activeCsvFields = useMemo(
+    () => CSV_FIELD_OPTIONS.filter((field) => selectedCsvFields.includes(field.key)),
+    [selectedCsvFields],
+  );
+
+  const handleDownloadCsv = (mode) => {
+    const sourceRecords =
+      mode === 'visible'
+        ? visibleRecords
+        : mode === 'selected'
+          ? selectedRecordsForExport
+          : tabScopedRecords;
+
+    if (!sourceRecords.length || activeCsvFields.length === 0) return;
+
+    const safeTabName = currentTabLabel.toLowerCase().replace(/\s+/g, '-');
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const headers = activeCsvFields.map((field) => field.label);
+    const rows = sourceRecords.map((record) => activeCsvFields.map((field) => field.getValue(record, sectorNameById)));
+    downloadCsvFile(`directorio-${safeTabName}-${dateStamp}.csv`, headers, rows);
+    setShowExportPanel(false);
+    setConfirmCsvDownload(null);
+  };
+
+  const handleToggleCsvField = (fieldKey) => {
+    setSelectedCsvFields((current) =>
+      current.includes(fieldKey)
+        ? current.filter((key) => key !== fieldKey)
+        : [...current, fieldKey],
+    );
+  };
+
+  const handleSelectAllCsvFields = () => setSelectedCsvFields(DEFAULT_CSV_FIELD_KEYS);
 
   const handleToggleSelectAll = () => {
     if (!canBulkSelect) return;
@@ -137,6 +231,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
 
   const handleDirectoryTabChange = (nextTab) => {
     setDirectoryTab(nextTab);
+    setShowExportPanel(false);
     if (nextTab !== 'archivados') {
       setArchiveSubtab('archivados');
     }
@@ -146,6 +241,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   };
   const handleArchiveSubtabChange = (nextSubtab) => {
     setArchiveSubtab(nextSubtab);
+    setShowExportPanel(false);
     setCurrentPage(1);
     setSelectionScopeKey(`archive:${nextSubtab}`);
     setSelectedIds([]);
@@ -239,6 +335,21 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
     setConfirmDirectoryAction(null);
   };
 
+  const requestCsvDownload = (mode) => {
+    const sourceRecords =
+      mode === 'visible'
+        ? visibleRecords
+        : mode === 'selected'
+          ? selectedRecordsForExport
+          : tabScopedRecords;
+    if (!sourceRecords.length || activeCsvFields.length === 0) return;
+    setConfirmCsvDownload({
+      mode,
+      count: sourceRecords.length,
+      label: mode === 'visible' ? 'visibles' : mode === 'selected' ? 'seleccionados' : 'todos',
+    });
+  };
+
   const activeFiltersCount = Object.values(filters).filter(v => v !== 'ALL').length + (globalSectorFilter !== 'ALL' ? 1 : 0);
 
   return (
@@ -313,6 +424,23 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               </span>
             )}
           </button>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowExportPanel(true)}
+              className={`flex items-center gap-2 rounded-full border px-4 py-3 text-sm font-bold transition-all ${
+                showExportPanel
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+              title={`Descargar CSV de ${currentTabLabel}`}
+            >
+              <Download size={18} />
+              <span className="hidden sm:inline">Descargar CSV</span>
+              <ChevronDown size={16} />
+            </button>
+          </div>
 
           <button
             type="button"
@@ -409,6 +537,137 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               </select>
             </div>
           </div>
+          </div>
+        </div>
+      )}
+
+      {showExportPanel && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={() => setShowExportPanel(false)}></div>
+          <div className="relative z-10 flex w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.97),rgba(239,253,248,0.92))] shadow-[0_40px_100px_-35px_rgba(15,23,42,0.32)]">
+            <div className="absolute -right-14 -top-14 h-32 w-32 rounded-full bg-emerald-200/45 blur-3xl"></div>
+            <div className="absolute -left-12 bottom-0 h-28 w-28 rounded-full bg-orange-200/35 blur-3xl"></div>
+            <div className="relative flex items-center justify-between gap-4 border-b border-white/70 px-5 py-4 sm:px-6">
+              <div>
+                <div className="mb-2 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700">
+                  Exportación CSV
+                </div>
+                <h3 className="text-xl font-black text-slate-900">Descargar {currentTabLabel}</h3>
+                <p className="mt-1 text-sm text-slate-500">Elige qué columnas quieres incluir antes de generar el archivo.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExportPanel(false)}
+                className="rounded-full border border-slate-200 bg-white/80 p-2 text-slate-400 transition-colors hover:bg-white hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="relative max-h-[70vh] overflow-y-auto px-5 py-5 sm:px-6">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Columnas del archivo</p>
+                <button
+                  type="button"
+                  onClick={handleSelectAllCsvFields}
+                  className="rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-slate-600 transition-colors hover:bg-white"
+                >
+                  Seleccionar todo
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {CSV_FIELD_OPTIONS.map((field) => {
+                  const checked = selectedCsvFields.includes(field.key);
+                  return (
+                    <button
+                      key={field.key}
+                      type="button"
+                      onClick={() => handleToggleCsvField(field.key)}
+                      className={`group flex items-center justify-between rounded-[1.5rem] border px-4 py-3 text-left text-sm font-semibold transition-all ${
+                        checked
+                          ? 'border-emerald-200 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(209,250,229,0.8))] text-emerald-800 shadow-[0_14px_30px_-24px_rgba(16,185,129,0.55)]'
+                          : 'border-slate-200 bg-white/80 text-slate-600 hover:bg-white hover:border-slate-300'
+                      }`}
+                    >
+                      <span>{field.label}</span>
+                      <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] transition-all ${checked ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-slate-300 bg-white text-slate-400 group-hover:border-slate-400'}`}>
+                        {checked ? <Check size={12} strokeWidth={3} /> : ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border-t border-white/70 bg-white/70 px-5 py-4 sm:px-6">
+              <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => requestCsvDownload('visible')}
+                  disabled={visibleRecords.length === 0 || activeCsvFields.length === 0}
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span>Visibles</span>
+                  <span className="text-xs text-slate-400">{visibleRecords.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => requestCsvDownload('selected')}
+                  disabled={selectedRecordsForExport.length === 0 || activeCsvFields.length === 0}
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span>Seleccionados</span>
+                  <span className="text-xs text-slate-400">{selectedRecordsForExport.length}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => requestCsvDownload('all')}
+                  disabled={tabScopedRecords.length === 0 || activeCsvFields.length === 0}
+                  className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-orange-50 px-4 py-3 text-sm font-black text-emerald-700 transition-colors hover:from-emerald-100 hover:to-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <span>Todos</span>
+                  <span className="text-xs text-emerald-500">{tabScopedRecords.length}</span>
+                </button>
+              </div>
+              <p className="text-xs text-slate-400">
+                Selecciona las columnas que quieras exportar. Luego confirma la descarga.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmCsvDownload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setConfirmCsvDownload(null)}></div>
+          <div className="relative z-10 w-full max-w-md overflow-hidden rounded-[2rem] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.97),rgba(248,250,252,0.96))] p-6 shadow-[0_32px_80px_-35px_rgba(15,23,42,0.4)]">
+            <div className="mb-4 inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-[#FF5A1F]">
+              Confirmar descarga
+            </div>
+            <h4 className="text-2xl font-black text-slate-900">¿Descargar CSV?</h4>
+            <p className="mt-3 text-sm leading-7 text-slate-500">
+              Vas a descargar <span className="font-bold text-slate-700">{confirmCsvDownload.count}</span> leads de <span className="font-bold text-slate-700">{currentTabLabel}</span> usando el bloque <span className="font-bold text-slate-700">{confirmCsvDownload.label}</span>.
+            </p>
+            <p className="mt-2 text-sm text-slate-400">
+              Columnas incluidas: {activeCsvFields.map((field) => field.label).join(', ')}.
+            </p>
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmCsvDownload(null)}
+                className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownloadCsv(confirmCsvDownload.mode)}
+                className="rounded-full bg-gradient-to-r from-[#FF5A1F] to-[#FF8B2B] px-5 py-3 text-sm font-black text-white shadow-[0_18px_35px_-18px_rgba(255,90,31,0.75)] transition-transform hover:scale-[1.02]"
+              >
+                Sí, descargar
+              </button>
+            </div>
           </div>
         </div>
       )}

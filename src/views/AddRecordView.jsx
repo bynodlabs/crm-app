@@ -33,6 +33,28 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
   const [formData, setFormData] = useState({ nombre: '', numero: '', correo: '', pais: 'PE', sector: 'CRI', subsector: '', origen: ORIGENES[0], fechaIngreso: getLocalISODate(), nota: '', sendToProspecting: false });
 
+  const countryDialPrefixes = useMemo(() => ({
+    PE: '+51',
+    MX: '+52',
+    CO: '+57',
+    AR: '+54',
+    CL: '+56',
+    ES: '+34',
+    US: '+1',
+    VE: '+58',
+    EC: '+593',
+    BO: '+591',
+    PY: '+595',
+    UY: '+598',
+    BR: '+55',
+    PA: '+507',
+    CR: '+506',
+    HN: '+504',
+    SV: '+503',
+    GT: '+502',
+    DO: '+1809',
+  }), []);
+
   const normalizeSectorText = (value = '') =>
     String(value || '')
       .normalize('NFD')
@@ -120,6 +142,22 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
     const detectedPais = detectCountryCodeFromPhone(num, formData.pais);
     setFormData({ ...formData, numero: num, pais: detectedPais });
+  };
+
+  const handleCountryChange = (e) => {
+    const nextPais = e.target.value;
+    const nextPrefix = countryDialPrefixes[nextPais] || '';
+    const previousPrefix = countryDialPrefixes[formData.pais] || '';
+    const currentNumero = String(formData.numero || '');
+    const trimmedNumero = currentNumero.trim();
+    const isEmpty = trimmedNumero.length === 0;
+    const isOnlyPreviousPrefix = previousPrefix && (trimmedNumero === previousPrefix || trimmedNumero === `${previousPrefix}`);
+
+    setFormData((prev) => ({
+      ...prev,
+      pais: nextPais,
+      numero: (isEmpty || isOnlyPreviousPrefix) && nextPrefix ? `${nextPrefix} ` : prev.numero,
+    }));
   };
 
   const handleNotaOpcionesChange = (e, field) => {
@@ -808,7 +846,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
               <InputUI label={t('add_ind_name')} name="nombre" value={formData.nombre} onChange={e => setFormData({ ...formData, nombre: e.target.value })} placeholder={t('add_ind_name_ph')} />
               <InputUI label={t('add_ind_phone')} name="numero" value={formData.numero} onChange={handlePhoneChange} placeholder="+51 987 654 321" />
-              <SelectUI label={t('add_ind_country')} name="pais" value={formData.pais} onChange={e => setFormData({ ...formData, pais: e.target.value })} options={PAISES.map(p => ({ code: p.code, nombre: `${p.flag} ${p.nombre}` }))} />
+              <SelectUI label={t('add_ind_country')} name="pais" value={formData.pais} onChange={handleCountryChange} options={PAISES.map(p => ({ code: p.code, nombre: `${p.flag} ${p.nombre}` }))} />
               <InputUI label={t('add_ind_email')} type="email" name="correo" value={formData.correo} onChange={e => setFormData({ ...formData, correo: e.target.value })} placeholder="carlos@email.com" />
               <SelectUI label={t('add_ind_sector')} name="sector" value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })} options={SECTORES.map(s => ({ code: s.id, nombre: s.nombre }))} />
               <InputUI label={t('add_ind_subsector')} name="subsector" value={formData.subsector} onChange={e => handleNotaOpcionesChange(e, 'subsector')} placeholder={t('add_ind_subsector_ph')} />
