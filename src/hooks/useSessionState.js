@@ -366,7 +366,9 @@ export function useSessionState() {
       };
       return commitProfileLocally(updatedUser);
     } catch (error) {
-      if (error?.status && error.status !== 404) {
+      const canFallbackLocally = !error?.status || error.status === 401 || error.status === 404 || error.status >= 500;
+
+      if (!canFallbackLocally) {
         return { ok: false, errorKey: 'err_profile_update_failed', error: error?.payload?.error || 'No se pudo actualizar el perfil.' };
       }
     }
