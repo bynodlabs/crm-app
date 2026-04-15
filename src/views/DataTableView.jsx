@@ -1,9 +1,11 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
-import { ESTADOS_PROSPECCION, ORIGENES, PAISES, SECTORES } from '../lib/constants';
+import { ESTADOS_PROSPECCION, ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
+import { getSectorByCode } from '../lib/sector-utils';
 import { getProbabilidadObj } from '../lib/lead-utils';
+import { useSectors } from '../hooks/useSectors';
 
 const DIRECTORY_PAGE_SIZE = 100;
 const isLiquidatedLead = (record) => record.estadoProspeccion === 'Liquidado';
@@ -56,6 +58,7 @@ const downloadCsvFile = (filename, headers, rows) => {
 };
 
 export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
+  const { sectors, activeSectors } = useSectors();
   const [showFilters, setShowFilters] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
@@ -80,7 +83,8 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   const [archiveSubtab, setArchiveSubtab] = useState('archivados');
   const [selectedCsvFields, setSelectedCsvFields] = useState(DEFAULT_CSV_FIELD_KEYS);
   const deferredSearchTerm = useDeferredValue(searchTerm);
-  const sectorNameById = useMemo(() => Object.fromEntries(SECTORES.map((sector) => [sector.id, sector.nombre])), []);
+  const sectorNameById = useMemo(() => Object.fromEntries(sectors.map((sector) => [sector.id, sector.nombre])), [sectors]);
+  const selectedSectorOption = useMemo(() => getSectorByCode(sectors, globalSectorFilter), [globalSectorFilter, sectors]);
   const sharedSourceIds = useMemo(
     () =>
       new Set(
@@ -503,7 +507,10 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pl-2">{t('dir_flt_sector')}</label>
               <select value={globalSectorFilter} onChange={(e) => { const nextSector = e.target.value; setGlobalSectorFilter?.(nextSector); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
                 <option value="ALL">{t('dir_opt_all')}</option>
-                {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                {activeSectors.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                {!activeSectors.some((sector) => sector.id === globalSectorFilter) && selectedSectorOption ? (
+                  <option value={selectedSectorOption.id}>{selectedSectorOption.nombre}</option>
+                ) : null}
               </select>
             </div>
             <div>
@@ -1033,7 +1040,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                         <td className="py-3 font-bold text-sm text-slate-700">{r.nombre}</td>
                         <td className="py-3 text-sm text-slate-600">{r.numero}</td>
                         <td className="py-3 text-sm text-slate-600">{r.correo || '-'}</td>
-                        <td className="py-3 text-sm text-slate-600">{SECTORES.find(s => s.id === r.sector)?.nombre || r.sector}</td>
+                        <td className="py-3 text-sm text-slate-600">{sectorNameById[r.sector] || r.sector}</td>
                       </tr>
                     ))}
                   </tbody>

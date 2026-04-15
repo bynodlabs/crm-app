@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Download, FileText, MessageCircle, Play, User, Users, X } from 'lucide-react';
-import { ORIGENES, PAISES, SECTORES } from '../lib/constants';
+import { ORIGENES, PAISES } from '../lib/constants';
 import { detectCountryCodeFromPhone } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
 import { buildLeadIdentity } from '../lib/lead-utils';
+import { useSectors } from '../hooks/useSectors';
 
 const InputUI = ({ label, ...props }) => (
   <div>
@@ -22,6 +23,7 @@ const SelectUI = ({ label, options, ...props }) => (
 );
 
 export function AddRecordView({ records, duplicateRecords = [], setRecords, setActiveTab, setDuplicateRecords, t, isViewOnly, currentUser, onCreateRecord, onImportRecords }) {
+  const { activeSectors } = useSectors();
   const [inputMode, setInputMode] = useState('whatsapp');
   const [massiveData, setMassiveData] = useState('');
   const [waData, setWaData] = useState('');
@@ -68,10 +70,10 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     const raw = normalizeSectorText(value);
     if (!raw) return '';
 
-    const directById = SECTORES.find((sector) => sector.id.toLowerCase() === raw);
+    const directById = activeSectors.find((sector) => sector.id.toLowerCase() === raw);
     if (directById) return directById.id;
 
-    const exactByName = SECTORES.find((sector) => normalizeSectorText(sector.nombre) === raw);
+    const exactByName = activeSectors.find((sector) => normalizeSectorText(sector.nombre) === raw);
     if (exactByName) return exactByName.id;
 
     const matches = [
@@ -811,7 +813,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 pl-4">{t('add_wa_sector')}</label>
                 <select value={waSector} onChange={(e) => setWaSector(e.target.value)} className="w-full px-6 py-3.5 bg-slate-50/50 border border-slate-200/60 rounded-full focus:bg-white focus:ring-2 focus:ring-green-100 focus:border-green-400 outline-none transition-all text-sm appearance-none">
-                  {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                  {activeSectors.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               </div>
               <div>
@@ -848,7 +850,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
               <InputUI label={t('add_ind_phone')} name="numero" value={formData.numero} onChange={handlePhoneChange} placeholder="+51 987 654 321" />
               <SelectUI label={t('add_ind_country')} name="pais" value={formData.pais} onChange={handleCountryChange} options={PAISES.map(p => ({ code: p.code, nombre: `${p.flag} ${p.nombre}` }))} />
               <InputUI label={t('add_ind_email')} type="email" name="correo" value={formData.correo} onChange={e => setFormData({ ...formData, correo: e.target.value })} placeholder="carlos@email.com" />
-              <SelectUI label={t('add_ind_sector')} name="sector" value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })} options={SECTORES.map(s => ({ code: s.id, nombre: s.nombre }))} />
+              <SelectUI label={t('add_ind_sector')} name="sector" value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })} options={activeSectors.map((s) => ({ code: s.id, nombre: s.nombre }))} />
               <InputUI label={t('add_ind_subsector')} name="subsector" value={formData.subsector} onChange={e => handleNotaOpcionesChange(e, 'subsector')} placeholder={t('add_ind_subsector_ph')} />
               <SelectUI label={t('add_ind_origin')} name="origen" value={formData.origen} onChange={e => setFormData({ ...formData, origen: e.target.value })} options={ORIGENES} />
               <InputUI label={t('add_ind_date')} type="date" name="fechaIngreso" value={formData.fechaIngreso} onChange={e => setFormData({ ...formData, fechaIngreso: e.target.value })} />

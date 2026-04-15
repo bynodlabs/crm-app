@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Mail, Phone, Save, User, X } from 'lucide-react';
-import { ESTADOS_PROSPECCION, SECTORES } from '../lib/constants';
+import { ESTADOS_PROSPECCION } from '../lib/constants';
 import { detectCountryCodeFromPhone, getCountryMetaForRecord } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
-import { LANG_LOCALES, translateSector, translateStatus } from '../lib/i18n';
+import { getSectorLabel } from '../lib/sector-utils';
+import { LANG_LOCALES, translateStatus } from '../lib/i18n';
+import { useSectors } from '../hooks/useSectors';
 
 const countsAsProspecting = (status) => status !== 'Nuevo' && status !== 'Descartado' && status !== 'Liquidado';
 const isArchivedStatus = (status) => status === 'Archivado';
 
 export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, language = 'es' }) {
+  const { sectors, activeSectors } = useSectors();
   const [draft, setDraft] = useState(record);
   const locale = LANG_LOCALES[language] || LANG_LOCALES.en;
 
@@ -19,10 +22,6 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
   const paisData = useMemo(
     () => getCountryMetaForRecord(draft),
     [draft],
-  );
-  const sectorData = useMemo(
-    () => SECTORES.find((sector) => sector.id === draft?.sector) || { nombre: translateSector(language, draft?.sector) || t('detail_no_sector') },
-    [draft, language, t],
   );
 
   if (!record || !draft) return null;
@@ -153,14 +152,14 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
                     onChange={(e) => setDraft((prev) => ({ ...prev, sector: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100 sm:min-w-[170px] sm:w-auto"
                   >
-                    {SECTORES.map((sector) => (
+                    {activeSectors.map((sector) => (
                       <option key={sector.id} value={sector.id}>
-                        {translateSector(language, sector.id)}
+                        {getSectorLabel(language, sector.id, sectors)}
                       </option>
                     ))}
-                    {!SECTORES.some((sector) => sector.id === draft.sector) && draft.sector ? (
+                    {!activeSectors.some((sector) => sector.id === draft.sector) && draft.sector ? (
                       <option value={draft.sector}>
-                        {translateSector(language, sectorData.nombre)}
+                        {getSectorLabel(language, draft.sector, sectors)}
                       </option>
                     ) : null}
                   </select>

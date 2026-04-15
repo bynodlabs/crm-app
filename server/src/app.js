@@ -5,6 +5,7 @@ import { readJsonBody, sendJson } from './http.js';
 import { clearRateLimit, consumeRateLimit } from './rate-limit.js';
 import { authService } from './services/auth-service.js';
 import { recordService } from './services/record-service.js';
+import { sectorService } from './services/sector-service.js';
 import { sharedLinkService } from './services/shared-link-service.js';
 import { userService } from './services/user-service.js';
 
@@ -104,6 +105,24 @@ export async function handleRequest(req, res) {
     if (!authUser) return;
     const users = await userService.listUsers(authUser);
     sendJson(res, 200, { items: users });
+    return;
+  }
+
+  if (pathname === '/api/sectors' && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const includeInactive = String(url.query?.includeInactive || '').toLowerCase() === 'true';
+    const result = await sectorService.listSectors(authUser.workspaceId, { includeInactive });
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  if (pathname === '/api/sectors' && req.method === 'POST') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const body = await readJsonBody(req);
+    const result = await sectorService.createSector(body, authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
     return;
   }
 
@@ -331,6 +350,15 @@ export async function handleRequest(req, res) {
     if (!authUser) return;
     const body = await readJsonBody(req);
     const result = await recordService.updateRecord(recordMatch[1], body, authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  const sectorMatch = pathname.match(/^\/api\/sectors\/([^/]+)$/);
+  if (sectorMatch && req.method === 'DELETE') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await sectorService.deleteSector(sectorMatch[1], authUser.workspaceId);
     sendJson(res, result.status, result.payload);
     return;
   }

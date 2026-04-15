@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Globe, Lock, Moon, Settings, Sun, X } from 'lucide-react';
+import { Globe, Lock, Moon, Settings, Sun, X, Shield } from 'lucide-react';
 import { AvatarInitials } from './AvatarInitials';
 
 const readFileAsDataUrl = (file) =>
@@ -39,7 +39,7 @@ const compressAvatarImage = async (file) => {
   return canvas.toDataURL('image/jpeg', 0.82);
 };
 
-export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIsDarkMode, language, setLanguage, t, onUpdatePassword, onUpdateProfile }) {
+export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIsDarkMode, language, setLanguage, t, onUpdatePassword, onUpdateProfile, onOpenAdminPanel }) {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.nombre || '');
   const [avatarDraft, setAvatarDraft] = useState(currentUser?.avatarUrl || '');
@@ -72,6 +72,11 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
     setErrorMsg('');
     setSuccessMsg('');
     onClose();
+  };
+
+  const handleOpenAdminPanel = () => {
+    onOpenAdminPanel?.();
+    handleClose();
   };
 
   const saveProfileDraft = async (nextName, nextAvatar, successText = t('settings_success_profile')) => {
@@ -285,6 +290,19 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
               </select>
             </div>
           </div>
+
+          {currentUser?.rol === 'admin' ? (
+            <div className="space-y-4">
+              <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Admin</h5>
+              <button
+                type="button"
+                onClick={handleOpenAdminPanel}
+                className="w-full py-3 px-4 rounded-xl border border-orange-200 bg-orange-50 text-[#FF5A1F] font-bold text-sm hover:bg-orange-100 transition-colors flex justify-center items-center gap-2"
+              >
+                <Shield size={16} /> Panel de Dio
+              </button>
+            </div>
+          ) : null}
 
           <div className="space-y-4 pt-4 border-t border-slate-100">
             <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('set_sec')}</h5>

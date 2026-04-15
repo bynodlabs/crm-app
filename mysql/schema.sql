@@ -29,6 +29,23 @@ CREATE TABLE IF NOT EXISTS `users` (
   KEY `idx_users_fechaRegistro` (`fechaRegistro`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `sectors` (
+  `id` VARCHAR(64) NOT NULL,
+  `workspaceId` VARCHAR(64) NOT NULL,
+  `code` VARCHAR(64) NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `icon` VARCHAR(32) NOT NULL,
+  `color` VARCHAR(128) NOT NULL,
+  `sortOrder` INT NOT NULL DEFAULT 0,
+  `isActive` TINYINT(1) NOT NULL DEFAULT 1,
+  `createdAt` DATETIME NOT NULL,
+  `updatedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sectors_workspace_code` (`workspaceId`, `code`),
+  KEY `idx_sectors_workspace_active` (`workspaceId`, `isActive`),
+  KEY `idx_sectors_workspace_sort` (`workspaceId`, `sortOrder`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS `records` (
   `id` VARCHAR(64) NOT NULL,
   `nombre` VARCHAR(255) NOT NULL,

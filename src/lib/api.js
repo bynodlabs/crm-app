@@ -98,6 +98,23 @@ export const api = {
     return apiRequest('/users');
   },
 
+  listSectors(params = {}) {
+    return apiRequest(`/sectors${buildQueryString(params)}`);
+  },
+
+  createSector(payload) {
+    return apiRequest('/sectors', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteSector(sectorId) {
+    return apiRequest(`/sectors/${sectorId}`, {
+      method: 'DELETE',
+    });
+  },
+
   adminOverview(params = {}) {
     return apiRequest(`/admin/overview${buildQueryString(params)}`);
   },

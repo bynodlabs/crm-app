@@ -1,25 +1,39 @@
 import { useMemo, useState } from 'react';
-import { Search, User, Users } from 'lucide-react';
+import { Plus, Search, User, Users, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { RecordCard } from '../components/RecordCard';
 import { SECTORES } from '../lib/constants';
+import { getSectorByCode, getSectorLabel } from '../lib/sector-utils';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
 import { translateSector } from '../lib/i18n';
+import { useSectors } from '../hooks/useSectors';
+
+const DEFAULT_DASHBOARD_SECTOR_IDS = SECTORES.slice(0, -1).map((sector) => sector.id);
+const DEFAULT_SECTOR_IDS = new Set(SECTORES.map((sector) => sector.id));
+const DEFAULT_CUSTOM_SECTOR_COLOR = 'from-sky-400 to-indigo-500';
 
 export function DashboardView({ records, allRecords = records, onSelectRecord, dashboardSectorFilter = 'ALL', setDashboardSectorFilter, setActiveTab, myAgents, t, currentUser, language = 'es', isDarkMode = false }) {
+  const { sectors, activeSectors, createSector, deleteSector } = useSectors();
   const [searchTerm, setSearchTerm] = useState('');
-  const topSectores = useMemo(() => SECTORES, []);
+  const [isCreateSectorOpen, setIsCreateSectorOpen] = useState(false);
+  const [customSectorTitle, setCustomSectorTitle] = useState('');
+  const [customSectorEmoji, setCustomSectorEmoji] = useState('✨');
+  const [sectorActionState, setSectorActionState] = useState({ status: 'idle', message: '' });
   const dashboardBaseRecords = allRecords;
   const globalTotalRecords = dashboardBaseRecords.length;
+
   const resolveSectorId = (sectorValue) => {
     const safeValue = String(sectorValue || '').trim();
     if (!safeValue) return 'UNKNOWN';
 
-    const directMatch = SECTORES.find((sector) => sector.id === safeValue);
+    const directMatch = getSectorByCode(sectors, safeValue);
     if (directMatch) return directMatch.id;
 
+    const defaultMatch = SECTORES.find((sector) => sector.id === safeValue);
+    if (defaultMatch) return defaultMatch.id;
+
     const normalizedValue = safeValue.toLowerCase();
-    const namedMatch = SECTORES.find((sector) => {
+    const namedMatch = sectors.find((sector) => {
       const normalizedId = sector.id.toLowerCase();
       const normalizedName = String(sector.nombre || '').trim().toLowerCase();
       const normalizedTranslated = translateSector(language, sector.id).toLowerCase();
@@ -39,6 +53,67 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
     r.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (r.numero && r.numero.includes(searchTerm))
   );
+
+  const dashboardSectors = useMemo(() => {
+    const activeById = new Map(activeSectors.map((sector) => [sector.id, sector]));
+    const defaults = DEFAULT_DASHBOARD_SECTOR_IDS.map((sectorId) => activeById.get(sectorId)).filter(Boolean);
+    const custom = activeSectors.find((sector) => !DEFAULT_SECTOR_IDS.has(sector.id));
+    return { defaults, custom };
+  }, [activeSectors]);
+
+  const handleOpenCreateSector = () => {
+    setCustomSectorTitle('');
+    setCustomSectorEmoji('✨');
+    setSectorActionState({ status: 'idle', message: '' });
+    setIsCreateSectorOpen(true);
+  };
+
+  const handleCreateCustomSector = async () => {
+    const safeTitle = String(customSectorTitle || '').trim();
+    if (!safeTitle) {
+      setSectorActionState({ status: 'error', message: 'El nombre del sector es obligatorio.' });
+      return;
+    }
+
+    setSectorActionState({ status: 'saving', message: '' });
+
+    try {
+      const result = await createSector({
+        name: safeTitle,
+        icon: String(customSectorEmoji || '').trim() || '✨',
+        color: DEFAULT_CUSTOM_SECTOR_COLOR,
+      });
+      setSectorActionState({
+        status: 'success',
+        message: result?.source === 'local' ? 'Sector creado localmente.' : 'Sector creado.',
+      });
+      setIsCreateSectorOpen(false);
+      setDashboardSectorFilter?.('ALL');
+    } catch (error) {
+      setSectorActionState({ status: 'error', message: error?.message || 'No se pudo crear el sector.' });
+    }
+  };
+
+  const handleDeleteCustomSector = async (event, sector) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!sector?.entityId) return;
+
+    setSectorActionState({ status: 'deleting', message: '' });
+
+    try {
+      const result = await deleteSector(sector.entityId);
+      if (dashboardSectorFilter === sector.id) {
+        setDashboardSectorFilter?.('ALL');
+      }
+      setSectorActionState({
+        status: 'success',
+        message: result?.source === 'local' ? 'Sector eliminado localmente.' : 'Sector eliminado.',
+      });
+    } catch (error) {
+      setSectorActionState({ status: 'error', message: error?.message || 'No se pudo eliminar el sector.' });
+    }
+  };
 
   return (
     <div className="flex h-full flex-col lg:flex-row">
@@ -77,69 +152,170 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
             <section className="mb-10">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-xl font-bold text-slate-800">{t('dash_top_sectors')}</h2>
-                {dashboardSectorFilter !== 'ALL' && (
-                  <button
-                    onClick={() => setDashboardSectorFilter?.('ALL')}
-                    className="text-xs font-bold text-slate-500 hover:text-[#FF5A1F] bg-slate-100 hover:bg-orange-50 px-3 py-1.5 rounded-full transition-all dark:bg-slate-800 dark:hover:bg-orange-900/30"
-                  >
-                    {t('dash_show_all')}
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {sectorActionState.message && (
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${
+                      sectorActionState.status === 'error'
+                        ? 'bg-rose-50 text-rose-600'
+                        : sectorActionState.status === 'success'
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      {sectorActionState.status === 'saving' || sectorActionState.status === 'deleting' ? 'Guardando...' : sectorActionState.message}
+                    </span>
+                  )}
+                  {dashboardSectorFilter !== 'ALL' && (
+                    <button
+                      onClick={() => setDashboardSectorFilter?.('ALL')}
+                      className="text-xs font-bold text-slate-500 hover:text-[#FF5A1F] bg-slate-100 hover:bg-orange-50 px-3 py-1.5 rounded-full transition-all dark:bg-slate-800 dark:hover:bg-orange-900/30"
+                    >
+                      {t('dash_show_all')}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="p-0">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 xl:gap-x-6 xl:gap-y-1.5">
-                {topSectores.map((sec, i) => {
-                  const isSelected = dashboardSectorFilter === sec.id;
-                  const isDimmed = dashboardSectorFilter !== 'ALL' && dashboardSectorFilter !== sec.id;
-                  const sectorTotal = sectorCounts[sec.id] || 0;
+                  {dashboardSectors.defaults.map((sec) => {
+                    const isSelected = dashboardSectorFilter === sec.id;
+                    const isDimmed = dashboardSectorFilter !== 'ALL' && dashboardSectorFilter !== sec.id;
+                    const sectorTotal = sectorCounts[sec.id] || 0;
 
-                  return (
+                    return (
+                      <div
+                        key={sec.id}
+                        onClick={() => setDashboardSectorFilter?.(isSelected ? 'ALL' : sec.id)}
+                        className={`group relative flex min-h-[114px] min-w-0 cursor-pointer flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200 ${
+                          isDimmed ? 'opacity-45 saturate-50' : 'opacity-100'
+                        }`}
+                      >
+                        <div className={`
+                          relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200
+                          ${isSelected
+                            ? isDarkMode
+                              ? 'border-white/45 bg-white/[0.09] shadow-[0_0_0_6px_rgba(255,255,255,0.04)]'
+                              : 'border-slate-300 bg-slate-50 shadow-[0_0_0_6px_rgba(148,163,184,0.08)]'
+                            : isDarkMode
+                              ? 'border-white/18 bg-white/[0.04] group-hover:border-white/28'
+                              : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}
+                        `}>
+                          <div className={`absolute inset-[6px] rounded-full bg-gradient-to-br ${sec.color} ${isSelected ? 'opacity-100 scale-100' : 'opacity-95 scale-[0.98]'} transition-transform duration-200`}></div>
+                          <span className="relative z-10 drop-shadow-sm">{sec.icon}</span>
+                        </div>
+                        <span className={`w-full break-words px-1 text-center text-sm font-bold leading-tight transition-colors duration-200 sm:text-[15px] ${
+                          isDarkMode
+                            ? isSelected
+                              ? 'text-white'
+                              : 'text-slate-200 group-hover:text-white'
+                            : isSelected
+                              ? 'text-slate-900'
+                              : 'text-slate-700 group-hover:text-slate-900'
+                        }`}>
+                          {getSectorLabel(language, sec.id, sectors)}
+                        </span>
+                        <span className={`mt-0 text-[11px] font-bold tracking-[0.11em] transition-colors duration-200 ${
+                          isDarkMode
+                            ? isSelected
+                              ? 'text-slate-100'
+                              : 'text-slate-300'
+                            : isSelected
+                              ? 'text-slate-700'
+                              : 'text-slate-500'
+                        }`}>
+                          {sectorTotal} LEADS
+                        </span>
+                      </div>
+                    );
+                  })}
+
+                  {dashboardSectors.custom ? (() => {
+                    const sec = dashboardSectors.custom;
+                    const isSelected = dashboardSectorFilter === sec.id;
+                    const isDimmed = dashboardSectorFilter !== 'ALL' && dashboardSectorFilter !== sec.id;
+                    const sectorTotal = sectorCounts[sec.id] || 0;
+
+                    return (
+                      <div
+                        key={sec.id}
+                        onClick={() => setDashboardSectorFilter?.(isSelected ? 'ALL' : sec.id)}
+                        className={`group relative flex min-h-[114px] min-w-0 cursor-pointer flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200 ${
+                          isDimmed ? 'opacity-45 saturate-50' : 'opacity-100'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={(event) => handleDeleteCustomSector(event, sec)}
+                          disabled={sectorActionState.status === 'deleting'}
+                          className={`absolute right-6 top-0 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-white text-slate-400 shadow-sm transition-all hover:border-rose-200 hover:text-rose-500 ${
+                            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          }`}
+                          aria-label={`Eliminar ${sec.nombre}`}
+                        >
+                          <X size={14} />
+                        </button>
+                        <div className={`
+                          relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200
+                          ${isSelected
+                            ? isDarkMode
+                              ? 'border-white/45 bg-white/[0.09] shadow-[0_0_0_6px_rgba(255,255,255,0.04)]'
+                              : 'border-slate-300 bg-slate-50 shadow-[0_0_0_6px_rgba(148,163,184,0.08)]'
+                            : isDarkMode
+                              ? 'border-white/18 bg-white/[0.04] group-hover:border-white/28'
+                              : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}
+                        `}>
+                          <div className={`absolute inset-[6px] rounded-full bg-gradient-to-br ${sec.color} ${isSelected ? 'opacity-100 scale-100' : 'opacity-95 scale-[0.98]'} transition-transform duration-200`}></div>
+                          <span className="relative z-10 drop-shadow-sm">{sec.icon}</span>
+                        </div>
+                        <span className={`w-full break-words px-1 text-center text-sm font-bold leading-tight transition-colors duration-200 sm:text-[15px] ${
+                          isDarkMode
+                            ? isSelected
+                              ? 'text-white'
+                              : 'text-slate-200 group-hover:text-white'
+                            : isSelected
+                              ? 'text-slate-900'
+                              : 'text-slate-700 group-hover:text-slate-900'
+                        }`}>
+                          {getSectorLabel(language, sec.id, sectors)}
+                        </span>
+                        <span className={`mt-0 text-[11px] font-bold tracking-[0.11em] transition-colors duration-200 ${
+                          isDarkMode
+                            ? isSelected
+                              ? 'text-slate-100'
+                              : 'text-slate-300'
+                            : isSelected
+                              ? 'text-slate-700'
+                              : 'text-slate-500'
+                        }`}>
+                          {sectorTotal} LEADS
+                        </span>
+                      </div>
+                    );
+                  })() : (
                     <button
                       type="button"
-                      key={i}
-                      onClick={() => setDashboardSectorFilter?.(isSelected ? 'ALL' : sec.id)}
-                      className={`group relative flex min-h-[114px] min-w-0 flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200 ${
-                        isDimmed ? 'opacity-45 saturate-50' : 'opacity-100'
-                      }`}
+                      onClick={handleOpenCreateSector}
+                      className="group relative flex min-h-[114px] min-w-0 flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200"
                     >
-                      <div className={`
-                        relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200
-                        ${isSelected
-                          ? isDarkMode
-                            ? 'border-white/45 bg-white/[0.09] shadow-[0_0_0_6px_rgba(255,255,255,0.04)]'
-                            : 'border-slate-300 bg-slate-50 shadow-[0_0_0_6px_rgba(148,163,184,0.08)]'
-                          : isDarkMode
-                            ? 'border-white/18 bg-white/[0.04] group-hover:border-white/28'
-                            : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}
-                      `}>
-                        <div className={`absolute inset-[6px] rounded-full bg-gradient-to-br ${sec.color} ${isSelected ? 'opacity-100 scale-100' : 'opacity-95 scale-[0.98]'} transition-transform duration-200`}></div>
-                        <span className="relative z-10 drop-shadow-sm">{sec.icon}</span>
+                      <div className={`relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200 ${
+                        isDarkMode
+                          ? 'border-dashed border-white/18 bg-white/[0.04] group-hover:border-white/30'
+                          : 'border-dashed border-slate-200 bg-slate-50 group-hover:border-slate-300'
+                      }`}>
+                        <div className={`absolute inset-[6px] rounded-full ${isDarkMode ? 'bg-white/[0.03]' : 'bg-white'} transition-transform duration-200`}></div>
+                        <span className="relative z-10 text-slate-400 group-hover:text-[#FF5A1F]"><Plus size={28} /></span>
                       </div>
                       <span className={`w-full break-words px-1 text-center text-sm font-bold leading-tight transition-colors duration-200 sm:text-[15px] ${
-                        isDarkMode
-                          ? isSelected
-                            ? 'text-white'
-                            : 'text-slate-200 group-hover:text-white'
-                          : isSelected
-                            ? 'text-slate-900'
-                            : 'text-slate-700 group-hover:text-slate-900'
+                        isDarkMode ? 'text-slate-200 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'
                       }`}>
-                        {translateSector(language, sec.id)}
+                        Agregar sector
                       </span>
                       <span className={`mt-0 text-[11px] font-bold tracking-[0.11em] transition-colors duration-200 ${
-                        isDarkMode
-                          ? isSelected
-                            ? 'text-slate-100'
-                            : 'text-slate-300'
-                          : isSelected
-                            ? 'text-slate-700'
-                            : 'text-slate-500'
+                        isDarkMode ? 'text-slate-300' : 'text-slate-500'
                       }`}>
-                        {sectorTotal} LEADS
+                        PERSONALIZADO
                       </span>
                     </button>
-                  );
-                })}
+                  )}
                 </div>
               </div>
             </section>
@@ -179,6 +355,66 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
           </>
         )}
       </div>
+
+      {isCreateSectorOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm" onClick={() => setIsCreateSectorOpen(false)}></div>
+          <div className="relative w-full max-w-sm rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-black text-slate-900">Nuevo sector</h3>
+                <p className="mt-1 text-sm text-slate-500">Agrega un sector personalizado para usarlo en toda la app.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCreateSectorOpen(false)}
+                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={customSectorTitle}
+                onChange={(event) => setCustomSectorTitle(event.target.value)}
+                placeholder="Titulo del sector"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100"
+              />
+              <input
+                type="text"
+                value={customSectorEmoji}
+                onChange={(event) => setCustomSectorEmoji(event.target.value)}
+                placeholder="Emoji"
+                maxLength={4}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-2xl outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100"
+              />
+              {sectorActionState.status === 'error' && sectorActionState.message ? (
+                <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600">{sectorActionState.message}</p>
+              ) : null}
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsCreateSectorOpen(false)}
+                className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-100"
+              >
+                {t('common_cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateCustomSector}
+                disabled={sectorActionState.status === 'saving'}
+                className="rounded-xl bg-[#FF5A1F] px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(255,90,31,0.28)] transition-colors hover:bg-[#e6501a]"
+              >
+                {sectorActionState.status === 'saving' ? 'Guardando...' : 'Crear'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="hidden lg:flex flex-col w-[320px] bg-white border-l border-slate-200 p-6 h-full shadow-[-10px_0_30px_-15px_rgba(0,0,0,0.05)] z-10 relative">
         <div className="flex-1 overflow-y-auto no-scrollbar mb-6">

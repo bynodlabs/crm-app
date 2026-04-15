@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, ArrowRight, CheckCircle, Clock, Edit2, FileText, List, Lock, Mail, MessageCircle, Phone, RefreshCw, Search, Target, Trash2, X, Zap } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
-import { ESTADOS_PROSPECCION, SECTORES } from '../lib/constants';
+import { ESTADOS_PROSPECCION } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
 import { triggerFaviconPulse } from '../lib/favicon';
-import { LANG_LOCALES, translateSector, translateStatus } from '../lib/i18n';
+import { getSectorIcon, getSectorLabel } from '../lib/sector-utils';
+import { LANG_LOCALES, translateStatus } from '../lib/i18n';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
+import { useSectors } from '../hooks/useSectors';
 
 const DAILY_GOAL_TARGET = 15;
 const DAILY_GOAL_EVENT_TAG = '[META DIARIA]';
@@ -45,6 +47,7 @@ function getLatestRealContactEntry(record) {
 }
 
 export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, onAutoSelect, onArchiveRecord, waTemplate, setWaTemplate, t, currentUser, language = 'es', isViewOnly, isDarkMode = false }) {
+  const { sectors } = useSectors();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeLeadId, setActiveLeadId] = useState(null);
   const [workspaceTab, setWorkspaceTab] = useState('active');
@@ -158,7 +161,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
 
     const isGenericName = !record.nombre || ['usuario wa', 'sin nombre', 'usuario ig'].includes(record.nombre.toLowerCase());
     const safeNombre = isGenericName ? '' : record.nombre.split(' ')[0];
-    const sectorName = translateSector(language, record.sector);
+    const sectorName = getSectorLabel(language, record.sector, sectors);
 
     let finalMsg = waTemplate.replace(/\(sector\)/gi, sectorName);
     if (safeNombre) {
@@ -282,7 +285,11 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
   }
 
   const paisData = activeLead ? getCountryMetaForRecord(activeLead) : null;
-  const sectorData = activeLead ? SECTORES.find(s => s.id === activeLead.sector) || { nombre: activeLead.sector, icon: '📌' } : null;
+  const sectorData = activeLead ? {
+    nombre: getSectorLabel(language, activeLead.sector, sectors),
+    icon: getSectorIcon(activeLead.sector, sectors),
+    id: activeLead.sector,
+  } : null;
   const prob = activeLead ? getProbabilidadObj(activeLead) : null;
 
   return (
@@ -503,7 +510,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t('ws_sector')}</p>
-                    <p className="font-medium text-sm text-slate-700 truncate">{sectorData.icon} {translateSector(language, sectorData.id || activeLead.sector || sectorData.nombre)}</p>
+                    <p className="font-medium text-sm text-slate-700 truncate">{sectorData.icon} {sectorData.nombre}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{t('ws_origin')}</p>

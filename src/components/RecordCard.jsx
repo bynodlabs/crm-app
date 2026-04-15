@@ -1,13 +1,15 @@
 import { ChevronRight } from 'lucide-react';
 import { AvatarInitials } from './AvatarInitials';
 import { getCountryMetaForRecord } from '../lib/country';
+import { getSectorLabel } from '../lib/sector-utils';
 import { getProbabilidadObj } from '../lib/lead-utils';
-import { translateSector } from '../lib/i18n';
+import { useSectors } from '../hooks/useSectors';
 
 export function RecordCard({ record, onClick, isDarkMode = false, t, language = 'es' }) {
+  const { sectors } = useSectors();
   const paisData = getCountryMetaForRecord(record);
   const prob = getProbabilidadObj(record);
-  const sectorLabel = translateSector(language, record.sector);
+  const sectorLabel = getSectorLabel(language, record.sector, sectors);
 
   return (
     <div onClick={onClick} className="group flex items-center justify-between gap-3 rounded-2xl border border-transparent bg-white p-3 shadow-[0_4px_15px_-5px_rgba(0,0,0,0.05)] transition-all hover:border-orange-100 hover:shadow-[0_8px_25px_-5px_rgba(0,0,0,0.1)] sm:pr-5">

@@ -166,9 +166,14 @@ const withTransaction = async (work) => {
   }
 };
 
-const queryRows = async (sql, params = []) => {
+export const queryRows = async (sql, params = []) => {
   const [rows] = await getPool().query(sql, params);
   return rows;
+};
+
+export const executeQuery = async (sql, params = []) => {
+  const [result] = await getPool().query(sql, params);
+  return result;
 };
 
 const chunk = (items, size = 250) => {

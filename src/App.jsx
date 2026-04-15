@@ -63,7 +63,7 @@ import { NavItem } from './components/NavItem';
 import { RecordCard } from './components/RecordCard';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { RecordDetailModal } from './components/RecordDetailModal';
-import { ESTADOS_PROSPECCION, ORIGENES, PAISES, PREFIX_TO_ISO, SECTORES } from './lib/constants';
+import { ESTADOS_PROSPECCION, ORIGENES, PAISES, PREFIX_TO_ISO, STORAGE_KEYS } from './lib/constants';
 import { getLocalISODate } from './lib/date';
 import { api } from './lib/api';
 import { FAVICON_PULSE_EVENT, triggerFaviconPulse } from './lib/favicon';
@@ -73,6 +73,7 @@ import { useBackendSync } from './hooks/useBackendSync';
 import { useCrmDataState } from './hooks/useCrmDataState';
 import { useLanguage } from './hooks/useLanguage';
 import { useCrmRecords } from './hooks/useCrmRecords';
+import { usePersistentState } from './hooks/usePersistentState';
 import { useSessionState } from './hooks/useSessionState';
 import { AddRecordView } from './views/AddRecordView';
 import { DataTableView } from './views/DataTableView';
@@ -293,6 +294,7 @@ export default function App() {
   const [dbSearchTerm, setDbSearchTerm] = useState(''); 
   const [dashboardSectorFilter, setDashboardSectorFilter] = useState('ALL');
   const [adminOverview, setAdminOverview] = useState({ users: [], records: [], duplicates: [], sharedLinks: [], workspaceLeadCounts: {} });
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = usePersistentState(`${STORAGE_KEYS.sidebarCollapsed}:${currentUser?.id || 'guest'}`, false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   // Estado para el panel lateral de configuración
@@ -741,28 +743,27 @@ export default function App() {
       {/* Esfera de luz para resaltar el cristal del menú lateral */}
       <div className="absolute top-40 left-0 w-64 h-64 bg-purple-500 rounded-full blur-[100px] opacity-10 pointer-events-none z-0"></div>
 
-      <aside className="hidden lg:flex w-64 glass-panel flex-col py-8 relative z-20 border-r border-slate-200/30 shrink-0">
-        <div className="flex items-center justify-center pl-10 pr-6 mb-3 sidebar-brand">
+      <aside className={`hidden lg:flex glass-panel flex-col py-8 relative z-20 border-r border-slate-200/30 shrink-0 transition-all duration-300 ${isSidebarCollapsed ? 'w-[92px]' : 'w-64'}`}>
+        <div className={`flex items-center justify-center mb-3 sidebar-brand transition-all duration-300 ${isSidebarCollapsed ? 'px-3' : 'pl-10 pr-6'}`}>
           <button
             type="button"
-            onClick={() => {
-              if (currentUser?.rol === 'admin') {
-                setActiveTab('god-panel');
-              }
-            }}
-            className={`relative group shrink-0 bg-transparent border-0 p-0 text-left ${currentUser?.rol === 'admin' ? 'cursor-pointer' : 'cursor-default'}`}
-            title={currentUser?.rol === 'admin' ? `${t('god_header_prefix')} ${t('god_header_emphasis')}` : 'Bigdata'}
+            onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+            className="relative group shrink-0 cursor-pointer bg-transparent border-0 p-0 text-left"
+            title={isSidebarCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
+            aria-label={isSidebarCollapsed ? 'Expandir sidebar' : 'Colapsar sidebar'}
           >
-            <div className="absolute left-4 right-4 -bottom-3 h-8 rounded-full bg-gradient-to-r from-[#FF3C00] via-[#FF7A00] to-[#FFB36B] opacity-0 blur-2xl scale-90 transition-all duration-500 group-hover:opacity-45 group-hover:scale-100"></div>
+            <div className={`absolute -bottom-3 h-8 rounded-full bg-gradient-to-r from-[#FF3C00] via-[#FF7A00] to-[#FFB36B] opacity-0 blur-2xl scale-90 transition-all duration-500 group-hover:opacity-45 group-hover:scale-100 ${isSidebarCollapsed ? 'left-2 right-2' : 'left-4 right-4'}`}></div>
             <div
-              className={`relative w-[164px] h-[76px] rounded-[1.75rem] flex items-center justify-center shadow-sm border transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_36px_-18px_rgba(255,90,31,0.65)] ${
+              className={`relative flex items-center justify-center shadow-sm border transition-all duration-300 group-hover:-translate-y-0.5 group-hover:shadow-[0_16px_36px_-18px_rgba(255,90,31,0.65)] ${
+                isSidebarCollapsed ? 'h-[58px] w-[58px] rounded-[1.15rem]' : 'w-[164px] h-[76px] rounded-[1.75rem]'
+              } ${
                 isDarkMode
                   ? 'bg-white/8 border-white/10'
                   : 'bg-white/80 border-slate-200/70'
               }`}
             >
               <div
-                className={`absolute inset-[1.5px] rounded-[1.6rem] transition-all duration-300 ${
+                className={`absolute inset-[1.5px] transition-all duration-300 ${isSidebarCollapsed ? 'rounded-[1rem]' : 'rounded-[1.6rem]'} ${
                   isDarkMode
                     ? 'bg-[#171717]/92'
                     : 'bg-white/92'
@@ -771,51 +772,54 @@ export default function App() {
 
               <BrandLogo
                 variant={isDarkMode ? 'light' : 'dark'}
-                size="md"
+                size={isSidebarCollapsed ? 'sm' : 'md'}
                 className="relative z-10"
-                imageClassName="w-[154px] h-auto"
+                imageClassName={isSidebarCollapsed ? 'w-7 h-7' : 'w-[154px] h-auto'}
               />
             </div>
           </button>
         </div>
 
         <nav className="mt-5 flex-1 space-y-1.5 px-0 overflow-y-auto no-scrollbar">
-          <NavItem icon={<Home size={20} />} label={t('nav_home')} active={activeTab === 'home' || activeTab === 'reports'} onClick={() => setActiveTab('home')} isDarkMode={isDarkMode} />
-          <NavItem icon={<Target size={20} />} label={t('nav_sales')} active={activeTab === 'prospecting'} onClick={() => setActiveTab('prospecting')} isDarkMode={isDarkMode} />
-          <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} />
-          <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} />
+          <NavItem icon={<Home size={20} />} label={t('nav_home')} active={activeTab === 'home' || activeTab === 'reports'} onClick={() => setActiveTab('home')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Target size={20} />} label={t('nav_sales')} active={activeTab === 'prospecting'} onClick={() => setActiveTab('prospecting')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
 
-          <div className="my-2 border-t border-slate-100 mx-6"></div>
-          <NavItem icon={<Users size={20} />} label={t('nav_team')} active={activeTab === 'network'} onClick={() => setActiveTab('network')} theme="purple" isDarkMode={isDarkMode} />
+          <div className={`my-2 border-t border-slate-100 ${isSidebarCollapsed ? 'mx-4' : 'mx-6'}`}></div>
+          <NavItem icon={<Users size={20} />} label={t('nav_team')} active={activeTab === 'network'} onClick={() => setActiveTab('network')} theme="purple" isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
         </nav>
 
-        <div className="px-6 mt-auto">
-          <div className="mb-4 flex items-center justify-between px-2">
-            <div className="flex items-center gap-3">
+        <div className={`mt-auto transition-all duration-300 ${isSidebarCollapsed ? 'px-3' : 'px-6'}`}>
+          <div className={`mb-4 flex items-center ${isSidebarCollapsed ? 'flex-col gap-3 px-0' : 'justify-between px-2'}`}>
+            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'gap-3 min-w-0'}`}>
               <AvatarInitials name={currentUser.nombre} size="sm" avatarUrl={currentUser.avatarUrl} isDarkMode={isDarkMode} />
-              <div className="truncate">
-                <p className="text-sm font-bold text-slate-700 truncate">{currentUser.nombre}</p>
-                <p className="text-[10px] text-slate-400 font-mono">ID: {currentUser.codigoPropio}</p>
-              </div>
+              {!isSidebarCollapsed ? (
+                <div className="truncate">
+                  <p className="text-sm font-bold text-slate-700 truncate">{currentUser.nombre}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">ID: {currentUser.codigoPropio}</p>
+                </div>
+              ) : null}
             </div>
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="p-1.5 text-slate-400 hover:text-[#FF5A1F] hover:bg-orange-50 rounded-lg transition-colors focus:outline-none"
+              className={`text-slate-400 hover:text-[#FF5A1F] hover:bg-orange-50 rounded-lg transition-colors focus:outline-none ${isSidebarCollapsed ? 'p-2.5' : 'p-1.5'}`}
               title={t('set_title')}
+              aria-label={t('set_title')}
             >
               <Settings size={18} />
             </button>
           </div>
           {adminReturnData ? (
-             <button type="button" onClick={handleReturnToAdmin} className="flex items-center gap-3 text-white bg-rose-500 hover:bg-rose-600 transition-colors px-4 py-3 rounded-xl border border-transparent w-full justify-center shadow-md font-bold mb-2">
+             <button type="button" onClick={handleReturnToAdmin} title={isSidebarCollapsed ? t('app_return_admin') : undefined} aria-label={t('app_return_admin')} className={`flex items-center text-white bg-rose-500 hover:bg-rose-600 transition-colors rounded-xl border border-transparent shadow-md font-bold mb-2 ${isSidebarCollapsed ? 'w-12 h-12 justify-center mx-auto' : 'gap-3 px-4 py-3 w-full justify-center'}`}>
                <LogOut size={18} />
-               <span className="text-sm">{t('app_return_admin')}</span>
+               {!isSidebarCollapsed ? <span className="text-sm">{t('app_return_admin')}</span> : null}
              </button>
           ) : (
-             <button type="button" onClick={handleLogout} className="flex items-center gap-3 text-slate-400 hover:text-slate-600 transition-colors px-4 py-3 rounded-xl border border-slate-200/50 w-full justify-center bg-transparent shadow-sm hover:bg-slate-50/50">
+             <button type="button" onClick={handleLogout} title={isSidebarCollapsed ? t('nav_logout') : undefined} aria-label={t('nav_logout')} className={`flex items-center text-slate-400 hover:text-slate-600 transition-colors rounded-xl border border-slate-200/50 bg-transparent shadow-sm hover:bg-slate-50/50 ${isSidebarCollapsed ? 'w-12 h-12 justify-center mx-auto' : 'gap-3 px-4 py-3 w-full justify-center'}`}>
                <LogOut size={18} />
-               <span className="font-medium text-sm">{t('nav_logout')}</span>
+               {!isSidebarCollapsed ? <span className="font-medium text-sm">{t('nav_logout')}</span> : null}
              </button>
           )}
         </div>
@@ -995,6 +999,7 @@ export default function App() {
       t={t}
       onUpdatePassword={handleUpdatePassword}
       onUpdateProfile={handleUpdateProfileWithPulse}
+      onOpenAdminPanel={() => setActiveTab('god-panel')}
       />
     </div>
   );

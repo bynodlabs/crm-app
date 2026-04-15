@@ -1,11 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import { Activity, Check, CheckCircle, Copy, Mail, PlusCircle, Share2, Target, User, UserPlus, Users, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
-import { PAISES, SECTORES } from '../lib/constants';
+import { PAISES } from '../lib/constants';
 import { getRecordCountryCode } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
+import { useSectors } from '../hooks/useSectors';
 
 function ShareLeadsModal({ onClose, records, teamMembers, onGenerated, t }) {
+  const { activeSectors } = useSectors();
   const [filterPais, setFilterPais] = useState('ALL');
   const [filterSector, setFilterSector] = useState('ALL');
   const [selectedTeamMemberId, setSelectedTeamMemberId] = useState(teamMembers[0]?.id || '');
@@ -136,7 +138,7 @@ function ShareLeadsModal({ onClose, records, teamMembers, onGenerated, t }) {
                   </select>
                   <select value={filterSector} onChange={(e) => setFilterSector(e.target.value)} className="w-full text-sm bg-white border border-slate-200 rounded-xl px-3 py-2.5 outline-none">
                     <option value="ALL">{t('team_modal_sector_all')}</option>
-                    {SECTORES.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+                    {activeSectors.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                   </select>
                 </div>
                 <p className="text-[10px] font-bold text-slate-400 mt-3 text-right">
