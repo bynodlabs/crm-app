@@ -3,6 +3,7 @@ import { Mail, Phone, Save, User, X } from 'lucide-react';
 import { ESTADOS_PROSPECCION } from '../lib/constants';
 import { detectCountryCodeFromPhone, getCountryMetaForRecord } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
+import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
 import { getSectorLabel } from '../lib/sector-utils';
 import { LANG_LOCALES, translateStatus } from '../lib/i18n';
 import { useSectors } from '../hooks/useSectors';
@@ -23,6 +24,8 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
     () => getCountryMetaForRecord(draft),
     [draft],
   );
+  const pipelineOptions = useMemo(() => getPipelineStageOptions(), []);
+  const activeStage = useMemo(() => getPipelineStageMeta(draft?.stage, draft), [draft]);
 
   if (!record || !draft) return null;
 
@@ -38,6 +41,14 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
       nextRecord.historial = [
         { fecha: getLocalISOTime(), accion: `Estado global actualizado a: ${draft.estadoProspeccion}` },
         ...(draft.historial || record.historial || []),
+      ];
+    }
+
+    if (normalizeLeadStage(draft.stage, draft) !== normalizeLeadStage(record.stage, record)) {
+      nextRecord.stage = normalizeLeadStage(draft.stage, draft);
+      nextRecord.historial = [
+        { fecha: getLocalISOTime(), accion: `Pipeline actualizado a: ${getPipelineStageMeta(draft.stage, draft).label}` },
+        ...(nextRecord.historial || draft.historial || record.historial || []),
       ];
     }
 
@@ -60,6 +71,13 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
       ...prev,
       numero: nextPhone,
       pais: detectCountryCodeFromPhone(nextPhone, prev?.pais || 'OT'),
+    }));
+  };
+
+  const handleStageChange = (nextStage) => {
+    setDraft((prev) => ({
+      ...prev,
+      stage: normalizeLeadStage(nextStage, prev),
     }));
   };
 
@@ -139,11 +157,54 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
 
           <div className="space-y-5">
             <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5">
+              <h4 className="mb-4 text-[11px] font-bold uppercase tracking-wider text-slate-400">Pipeline</h4>
+              <div className="flex flex-wrap gap-2">
+                {pipelineOptions.map((stage) => {
+                  const isActive = activeStage.id === stage.id;
+                  return (
+                    <button
+                      key={stage.id}
+                      type="button"
+                      onClick={() => handleStageChange(stage.id)}
+                      className={`rounded-full border px-3 py-2 text-xs font-bold transition-all ${
+                        isActive
+                          ? 'border-[#FF5A1F] bg-orange-50 text-[#FF5A1F] shadow-sm'
+                          : 'border-slate-200 bg-white text-slate-500 hover:border-orange-200 hover:text-[#FF5A1F]'
+                      }`}
+                    >
+                      {stage.icon} {stage.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-slate-100 bg-slate-50 p-5">
               <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-4">{t('common_summary')}</h4>
               <div className="space-y-3 text-sm text-slate-600">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium">{t('common_country')}</span>
                   <span className="font-bold text-slate-800 flex items-center gap-2">{paisData.flag} {paisData.nombre}</span>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-medium">Calidad</span>
+                  <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black ${
+                    draft.categoria === 'A'
+                      ? 'bg-emerald-100 text-emerald-600'
+                      : draft.categoria === 'B'
+                        ? 'bg-orange-100 text-[#FF5A1F]'
+                        : draft.categoria === 'C'
+                          ? 'bg-amber-100 text-amber-600'
+                          : 'bg-slate-100 text-slate-500'
+                  }`}>
+                    {draft.categoria || '-'}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-medium">Pipeline</span>
+                  <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-bold ${activeStage.classes}`}>
+                    {activeStage.icon} {activeStage.label}
+                  </span>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-medium">{t('common_sector')}</span>

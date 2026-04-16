@@ -10,6 +10,26 @@ const isLiquidatedStatus = (status) => status === 'Liquidado';
 const isDiscardedStatus = (status) => status === 'Descartado';
 const isArchivedStatus = (record) => (record.estadoProspeccion === 'Archivado' || record.isArchived) && !isDiscardedStatus(record.estadoProspeccion) && !isLiquidatedStatus(record.estadoProspeccion);
 const countsAsProspecting = (status) => status !== 'Nuevo' && !isDiscardedStatus(status) && !isLiquidatedStatus(status);
+const normalizePipelineStage = (stageValue = '', statusValue = '') => {
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+
+  const normalizedStage = normalize(stageValue);
+  if (normalizedStage === 'new_lead' || normalizedStage === 'nuevo' || normalizedStage === 'nuevo lead') return 'new_lead';
+  if (normalizedStage === 'hot_lead' || normalizedStage === 'prospeccion' || normalizedStage === 'en prospeccion') return 'hot_lead';
+  if (normalizedStage === 'payment' || normalizedStage === 'pago') return 'payment';
+  if (normalizedStage === 'customer' || normalizedStage === 'cliente') return 'customer';
+  if (normalizedStage === 'closed_lost' || normalizedStage === 'lost' || normalizedStage === 'closed lost' || normalizedStage === 'cerrado') return 'closed_lost';
+
+  const normalizedStatus = normalize(statusValue);
+  if (normalizedStatus === 'nuevo') return 'new_lead';
+  if (normalizedStatus === 'en prospeccion' || normalizedStatus === 'prospeccion') return 'hot_lead';
+  return 'new_lead';
+};
 const createUniqueRecordId = (existingIds = []) => {
   const values = Array.isArray(existingIds) ? existingIds : Array.from(existingIds || []);
   const taken = new Set(values.map((value) => String(value || '').trim()).filter(Boolean));
@@ -42,6 +62,7 @@ export const recordService = {
       const matchesPais = !query.pais || query.pais === 'ALL' || record.pais === query.pais;
       const matchesCategoria = !query.categoria || query.categoria === 'ALL' || record.categoria === query.categoria;
       const matchesEstado = !query.estado || query.estado === 'ALL' || (record.estadoProspeccion || 'Nuevo') === query.estado;
+      const matchesStage = !query.stage || query.stage === 'ALL' || normalizePipelineStage(record.stage, record.estadoProspeccion) === query.stage;
       const matchesSector = !query.sector || query.sector === 'ALL' || record.sector === query.sector;
       const matchesOrigen = !query.origen || query.origen === 'ALL' || record.origen === query.origen;
       const matchesMensaje =
@@ -76,6 +97,7 @@ export const recordService = {
         matchesPais &&
         matchesCategoria &&
         matchesEstado &&
+        matchesStage &&
         matchesSector &&
         matchesOrigen &&
         matchesMensaje &&
@@ -121,6 +143,7 @@ export const recordService = {
       categoria: input.categoria || '-',
       canal: input.canal || 'Manual',
       estadoProspeccion: input.estadoProspeccion || 'Nuevo',
+      stage: normalizePipelineStage(input.stage, input.estadoProspeccion || 'Nuevo'),
       responsable: input.responsable || 'Sin Asignar',
       inProspecting: Boolean(input.inProspecting),
       isArchived: Boolean(input.isArchived),
@@ -165,6 +188,7 @@ export const recordService = {
       correo: input.correo || input.email || '',
       sector: input.sector || 'General',
       estadoProspeccion: input.estadoProspeccion || 'Nuevo',
+      stage: normalizePipelineStage(input.stage, input.estadoProspeccion || 'Nuevo'),
       responsable: input.responsable || 'Sin Asignar',
       inProspecting: Boolean(input.inProspecting),
       isArchived: Boolean(input.isArchived),
@@ -237,6 +261,7 @@ export const recordService = {
       correo: input.correo || input.email || '',
       sector: input.sector || 'General',
       estadoProspeccion: input.estadoProspeccion || 'Nuevo',
+      stage: normalizePipelineStage(input.stage, input.estadoProspeccion || 'Nuevo'),
       responsable: input.responsable || 'Sin Asignar',
       inProspecting: Boolean(input.inProspecting),
       isArchived: Boolean(input.isArchived),
@@ -280,7 +305,12 @@ export const recordService = {
       return { status: 404, payload: { error: 'Registro no encontrado.' } };
     }
 
-    Object.assign(record, updates);
+    const normalizedUpdates = { ...updates };
+    if (Object.prototype.hasOwnProperty.call(normalizedUpdates, 'stage')) {
+      normalizedUpdates.stage = normalizePipelineStage(normalizedUpdates.stage, normalizedUpdates.estadoProspeccion || record.estadoProspeccion);
+    }
+
+    Object.assign(record, normalizedUpdates);
     await writeDb(db);
 
     return { status: 200, payload: { record } };
@@ -474,6 +504,7 @@ export const recordService = {
         workspaceId: targetUser.workspaceId,
         propietarioId: targetUser.id,
         responsable: targetUser.nombre,
+        stage: 'new_lead',
         inProspecting: false,
         isArchived: false,
         estadoProspeccion: 'Nuevo',

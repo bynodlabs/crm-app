@@ -3,8 +3,8 @@ import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Searc
 import { AvatarInitials } from '../components/AvatarInitials';
 import { ESTADOS_PROSPECCION, ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
+import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
 import { getSectorByCode } from '../lib/sector-utils';
-import { getProbabilidadObj } from '../lib/lead-utils';
 import { useSectors } from '../hooks/useSectors';
 
 const DIRECTORY_PAGE_SIZE = 100;
@@ -24,6 +24,7 @@ const CSV_FIELD_OPTIONS = [
   { key: 'fechaIngreso', label: 'FechaIngreso', getValue: (record) => record.fechaIngreso || '' },
   { key: 'categoria', label: 'Categoria', getValue: (record) => record.categoria || '' },
   { key: 'estadoProspeccion', label: 'Estado', getValue: (record) => record.estadoProspeccion || '' },
+  { key: 'stage', label: 'Pipeline', getValue: (record) => getPipelineStageMeta(record.stage, record).label },
   { key: 'responsable', label: 'Responsable', getValue: (record) => record.responsable || '' },
   { key: 'workspaceId', label: 'WorkspaceId', getValue: (record) => record.workspaceId || '' },
   { key: 'mensajeEnviado', label: 'MensajeEnviado', getValue: (record) => (record.mensajeEnviado ? 'Sí' : 'No') },
@@ -60,6 +61,7 @@ const downloadCsvFile = (filename, headers, rows) => {
 export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
   const { sectors, activeSectors } = useSectors();
   const [showFilters, setShowFilters] = useState(false);
+  const [showPipelineDropdown, setShowPipelineDropdown] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
   const [selectedDuplicateIds, setSelectedDuplicateIds] = useState([]);
@@ -71,6 +73,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
     pais: 'ALL',
     categoria: 'ALL',
     estado: 'ALL',
+    stage: 'ALL',
     origen: 'ALL',
     mensaje: 'ALL',
     responsable: 'ALL',
@@ -85,6 +88,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const sectorNameById = useMemo(() => Object.fromEntries(sectors.map((sector) => [sector.id, sector.nombre])), [sectors]);
   const selectedSectorOption = useMemo(() => getSectorByCode(sectors, globalSectorFilter), [globalSectorFilter, sectors]);
+  const pipelineOptions = useMemo(() => getPipelineStageOptions(), []);
   const sharedSourceIds = useMemo(
     () =>
       new Set(
@@ -131,6 +135,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
       const matchesPais = filters.pais === 'ALL' || record.pais === filters.pais;
       const matchesCategoria = filters.categoria === 'ALL' || record.categoria === filters.categoria;
       const matchesEstado = filters.estado === 'ALL' || (record.estadoProspeccion || 'Nuevo') === filters.estado;
+      const matchesStage = filters.stage === 'ALL' || normalizeLeadStage(record.stage, record) === filters.stage;
       const matchesSector = globalSectorFilter === 'ALL' || record.sector === globalSectorFilter;
       const matchesOrigen = filters.origen === 'ALL' || record.origen === filters.origen;
       const matchesMensaje = filters.mensaje === 'ALL' || (filters.mensaje === 'ENVIADO' ? record.mensajeEnviado : !record.mensajeEnviado);
@@ -138,7 +143,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
       const isProspecting = countsAsProspecting(record);
       const matchesEspacio = filters.espacio === 'ALL' || (filters.espacio === 'IN' ? isProspecting : !isProspecting);
 
-      return matchesSearch && matchesPais && matchesCategoria && matchesEstado && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio;
+      return matchesSearch && matchesPais && matchesCategoria && matchesEstado && matchesStage && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio;
     });
   }, [deferredSearchTerm, filters, globalSectorFilter, sectorNameById, tabScopedRecords]);
   const displayRecords = filteredRecords;
@@ -183,10 +188,14 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   );
 
   const currentTabLabel = useMemo(() => {
-    if (directoryTab === 'nuevos') return t('dir_tab_new');
-    if (directoryTab === 'archivados') return archiveSubtab === 'compartidos' ? 'Compartidos' : t('dir_tab_archived');
+    if (directoryTab === 'nuevos') return 'Leads';
+    if (directoryTab === 'archivados') return archiveSubtab === 'compartidos' ? 'Compartidos' : 'Archivo';
     return t('dir_tab_discarded');
   }, [archiveSubtab, directoryTab, t]);
+  const selectedPipelineMeta = useMemo(
+    () => (filters.stage === 'ALL' ? null : getPipelineStageMeta(filters.stage)),
+    [filters.stage],
+  );
   const activeCsvFields = useMemo(
     () => CSV_FIELD_OPTIONS.filter((field) => selectedCsvFields.includes(field.key)),
     [selectedCsvFields],
@@ -365,12 +374,67 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
         <div>
           <h2 className="text-2xl font-black text-slate-800">{t('dir_title')}</h2>
           <div className="mt-3 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <div className="flex w-full rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-fit">
-              <button type="button" onClick={() => handleDirectoryTabChange('nuevos')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'nuevos' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
-                {t('dir_tab_new')}
-              </button>
+            <div className="relative flex w-full rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-fit">
+              <div className="relative flex items-center">
+                <button type="button" onClick={() => handleDirectoryTabChange('nuevos')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'nuevos' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
+                  Leads
+                </button>
+                {directoryTab === 'nuevos' && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPipelineDropdown((prev) => !prev)}
+                    className={`ml-1 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
+                      showPipelineDropdown || selectedPipelineMeta
+                        ? 'bg-white text-[#FF5A1F] shadow-sm'
+                        : 'text-slate-500 hover:bg-white/80 hover:text-slate-700'
+                    }`}
+                    title="Filtrar pipeline"
+                  >
+                    <ChevronDown size={16} className={`transition-transform ${showPipelineDropdown ? 'rotate-180' : ''}`} />
+                  </button>
+                )}
+                {directoryTab === 'nuevos' && showPipelineDropdown && (
+                  <div className="absolute left-0 top-[calc(100%+0.55rem)] z-30 w-[220px] rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.35)]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFilters((prev) => ({ ...prev, stage: 'ALL' }));
+                        setCurrentPage(1);
+                        clearSelection();
+                        setShowPipelineDropdown(false);
+                      }}
+                      className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
+                        filters.stage === 'ALL'
+                          ? 'bg-slate-900 text-white'
+                          : 'text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-sm">◌</span> Todos los leads
+                    </button>
+                    {pipelineOptions.map((stage) => (
+                      <button
+                        key={stage.id}
+                        type="button"
+                        onClick={() => {
+                          setFilters((prev) => ({ ...prev, stage: stage.id }));
+                          setCurrentPage(1);
+                          clearSelection();
+                          setShowPipelineDropdown(false);
+                        }}
+                        className={`mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
+                          filters.stage === stage.id
+                            ? 'bg-orange-50 text-[#FF5A1F]'
+                            : 'text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{stage.icon}</span> {stage.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <button type="button" onClick={() => handleDirectoryTabChange('archivados')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'archivados' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
-                {t('dir_tab_archived')}
+                Archivo
               </button>
               <button type="button" onClick={() => handleDirectoryTabChange('descartados')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'descartados' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
                 {t('dir_tab_discarded')}
@@ -393,6 +457,20 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                   Compartidos
                 </button>
               </div>
+            )}
+            {directoryTab === 'nuevos' && selectedPipelineMeta && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilters((prev) => ({ ...prev, stage: 'ALL' }));
+                  setCurrentPage(1);
+                  clearSelection();
+                }}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold ${selectedPipelineMeta.classes}`}
+              >
+                {selectedPipelineMeta.icon} {selectedPipelineMeta.label}
+                <X size={12} />
+              </button>
             )}
             <p className="ml-1 text-xs font-medium text-slate-400 sm:ml-2">
               {t('dir_showing')} {directoryTotal} {t('dir_prospects')} {directoryTotal > 0 && <span className="ml-1">· página {currentDisplayPage}/{directoryTotalPages}</span>}
@@ -471,14 +549,14 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               <Sliders size={16} className="text-[#FF5A1F]" /> {t('dir_filters_title')}
             </h3>
             {activeFiltersCount > 0 && (
-              <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); setCurrentPage(1); clearSelection(); }} className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
+              <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); setCurrentPage(1); clearSelection(); }} className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
                 {t('dir_clear_filters')}
               </button>
             )}
           </div>
 
           <div className="overflow-visible md:max-h-[68vh] md:overflow-y-auto md:overscroll-contain md:pr-1 no-scrollbar [webkit-overflow-scrolling:touch]">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-9">
             <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pl-2">{t('dir_flt_country')}</label>
               <select value={filters.pais} onChange={(e) => { setFilters({ ...filters, pais: e.target.value }); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
@@ -501,6 +579,13 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               <select value={filters.estado} onChange={(e) => { setFilters({ ...filters, estado: e.target.value }); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
                 <option value="ALL">{t('dir_opt_all')}</option>
                 {ESTADOS_PROSPECCION.filter((est) => est.id !== 'Descartado' && est.id !== 'Liquidado').map(est => <option key={est.id} value={est.id}>{est.id}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pl-2">Pipeline</label>
+              <select value={filters.stage} onChange={(e) => { setFilters({ ...filters, stage: e.target.value }); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
+                <option value="ALL">Todos</option>
+                {pipelineOptions.map((stage) => <option key={stage.id} value={stage.id}>{stage.icon} {stage.label}</option>)}
               </select>
             </div>
             <div>
@@ -702,7 +787,8 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
           <div className="space-y-3 md:hidden">
             {visibleRecords.length > 0 ? visibleRecords.map((r) => {
               const paisData = getCountryMetaForRecord(r);
-              const prob = getProbabilidadObj(r);
+              const stageMeta = getPipelineStageMeta(r.stage, r);
+              const qualityClass = r.categoria === 'A' ? 'bg-emerald-100 text-emerald-600' : r.categoria === 'B' ? 'bg-orange-100 text-[#FF5A1F]' : r.categoria === 'C' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400';
 
               return (
                 <div
@@ -736,8 +822,13 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                         <p className="mt-0.5 text-xs text-slate-500">{r.numero || r.correo || '-'}</p>
                       </div>
                     </div>
-                    <span className={`inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-bold shadow-sm ${prob.bgClass} ${prob.textClass}`}>
-                      {prob.icon} {prob.nivel}
+                    <span className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-[11px] font-black shadow-sm ${qualityClass}`}>
+                      {r.categoria}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold ${stageMeta.classes}`}>
+                      {stageMeta.icon} {stageMeta.label}
                     </span>
                   </div>
                 </div>
@@ -748,7 +839,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                 <p className="mb-1 text-sm font-medium text-slate-500">{t('dir_no_matches')}</p>
                 <p className="text-xs text-slate-400">{t('dir_try_relax')}</p>
                 {activeFiltersCount > 0 && (
-                  <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 rounded-full bg-orange-50 px-4 py-2 text-xs font-bold text-[#FF5A1F] transition-colors hover:bg-orange-100">
+                  <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 rounded-full bg-orange-50 px-4 py-2 text-xs font-bold text-[#FF5A1F] transition-colors hover:bg-orange-100">
                     {t('dir_clear_filters')}
                   </button>
                 )}
@@ -788,13 +879,10 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                 const idParts = r.id.split('-');
                 const idPrefix = idParts.slice(0, -1).join('-') + '-';
                 const idSuffix = idParts[idParts.length - 1];
-                const estadoData = ESTADOS_PROSPECCION.find(e => e.id === (r.estadoProspeccion || 'Nuevo'));
-                const prob = getProbabilidadObj(r);
                 const ownerData = myAgents.find(a => a.nombre === r.responsable) || myAgents[0];
                 const inProspecting = countsAsProspecting(r);
                 const sectorLabel = sectorNameById[r.sector] || r.sector;
-
-                const rowStateLabel = isSharedArchiveView ? 'Compartido' : r.estadoProspeccion;
+                const stageMeta = getPipelineStageMeta(r.stage, r);
 
                 return (
                   <tr key={r.id} onClick={() => onSelectRecord(r)} className={`transition-colors group cursor-pointer ${canBulkSelect && effectiveSelectedIds.includes(r.id) ? 'bg-orange-50/50' : 'hover:bg-slate-50/50'}`}>
@@ -842,12 +930,9 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                       <div className="text-xs text-slate-400 truncate max-w-[150px] mt-0.5">{r.subsector || r.origen}</div>
                     </td>
                     <td className="py-4 text-center">
-                      <div className="flex flex-col items-center gap-1.5">
-                        <div className="flex items-center gap-1">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-black shadow-sm ${r.categoria === 'A' ? 'bg-emerald-100 text-emerald-600' : r.categoria === 'B' ? 'bg-orange-100 text-[#FF5A1F]' : r.categoria === 'C' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>{r.categoria}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 ${prob.bgClass} ${prob.textClass}`} title={`Probabilidad ${prob.nivel}`}>{prob.icon} {prob.nivel}</span>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isSharedArchiveView ? 'bg-blue-100 text-blue-700' : `${estadoData?.bgLight} ${estadoData?.text}`}`}>{rowStateLabel}</span>
+                      <div className="flex flex-col items-center gap-2">
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-black shadow-sm ${r.categoria === 'A' ? 'bg-emerald-100 text-emerald-600' : r.categoria === 'B' ? 'bg-orange-100 text-[#FF5A1F]' : r.categoria === 'C' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>{r.categoria}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${stageMeta.classes}`}>{stageMeta.icon} {stageMeta.shortLabel}</span>
                       </div>
                     </td>
                     <td className="py-4 text-right pr-6 flex justify-end gap-2 items-center h-full">
@@ -875,7 +960,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                       <p className="text-sm font-medium text-slate-500 mb-1">{t('dir_no_matches')}</p>
                       <p className="text-xs text-slate-400">{t('dir_try_relax')}</p>
                       {activeFiltersCount > 0 && (
-                        <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 px-4 py-2 bg-orange-50 text-[#FF5A1F] rounded-full text-xs font-bold hover:bg-orange-100 transition-colors">
+                        <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 px-4 py-2 bg-orange-50 text-[#FF5A1F] rounded-full text-xs font-bold hover:bg-orange-100 transition-colors">
                           {t('dir_clear_filters')}
                         </button>
                       )}

@@ -3,6 +3,7 @@ import { Download, FileText, MessageCircle, Play, User, Users, X } from 'lucide-
 import { ORIGENES, PAISES } from '../lib/constants';
 import { detectCountryCodeFromPhone } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
+import { normalizeLeadStage } from '../lib/lead-pipeline';
 import { buildLeadIdentity } from '../lib/lead-utils';
 import { useSectors } from '../hooks/useSectors';
 
@@ -280,6 +281,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
     const newRecord = {
       ...formData, id, categoria: categoriaCalculada, canal: 'Automático', estadoProspeccion: finalStatus, mensajeEnviado: false, responsable: 'Sin Asignar',
+      stage: normalizeLeadStage('', { estadoProspeccion: finalStatus }),
       inProspecting: formData.sendToProspecting, isArchived: false, propietarioId: currentUser.id, workspaceId: currentUser.workspaceId,
       historial: [{ fecha: getLocalISOTime(), accion: `Creado manual en el sistema (Estado: ${finalStatus})` }]
     };
@@ -379,6 +381,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
               }),
               canal: 'Masivo',
               estadoProspeccion: 'Nuevo',
+              stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
               mensajeEnviado: false,
               responsable: 'Sin Asignar',
               propietarioId: currentUser.id,
@@ -478,6 +481,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
             categoria: cat,
             canal: 'Masivo',
             estadoProspeccion: 'Nuevo',
+            stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
             mensajeEnviado: false,
             responsable: 'Sin Asignar',
             propietarioId: currentUser.id,
@@ -537,7 +541,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         const newRecord = {
           nombre, pais: paisCode, numero, correo, sector, subsector, origen,
           fechaIngreso: getLocalISODate(dateObj), nota, id, categoria: cat, canal: 'Instagram',
-          estadoProspeccion: 'Nuevo', mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, inProspecting: false, isArchived: false, historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente vía Instagram Scraping' }]
+          estadoProspeccion: 'Nuevo', stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }), mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, inProspecting: false, isArchived: false, historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente vía Instagram Scraping' }]
         };
         const leadKey = buildLeadIdentity(newRecord);
         const isDup = leadKey && batchSeenKeys.has(leadKey);
@@ -615,7 +619,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
           nombre, pais: safePais, numero, correo, sector: safeSector, subsector, origen,
           fechaIngreso: isNaN(dateObj.getTime()) ? getLocalISODate() : fechaIngreso,
           nota, id, categoria: cat, canal: 'Masivo',
-          estadoProspeccion: 'Nuevo', mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, inProspecting: false, isArchived: false, historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente (Formato Genérico)' }]
+          estadoProspeccion: 'Nuevo', stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }), mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, inProspecting: false, isArchived: false, historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente (Formato Genérico)' }]
         };
         const leadKey = buildLeadIdentity(newRecord);
         const normalizedPhone = numero ? numero.replace(/\D/g, '') : '';
@@ -692,6 +696,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         categoria: 'C',
         canal: 'WhatsApp',
         estadoProspeccion: 'Nuevo',
+        stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
         mensajeEnviado: false,
         responsable: 'Sin Asignar',
         propietarioId: currentUser.id,

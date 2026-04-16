@@ -218,6 +218,7 @@ const mapRecordRow = (row) => {
     categoria: row.categoria ?? '',
     canal: row.canal ?? '',
     estadoProspeccion: row.estadoProspeccion ?? 'Nuevo',
+    stage: row.stage ?? '',
     mensajeEnviado: toBoolean(row.mensajeEnviado),
     responsable: row.responsable ?? 'Sin Asignar',
     propietarioId: row.propietarioId ?? null,
@@ -274,9 +275,9 @@ const loadDbSnapshot = async () => {
   ] = await Promise.all([
     queryRows('SELECT `nombre`, `avatarUrl` FROM `adminProfile` LIMIT 1'),
     queryRows('SELECT `id`, `nombre`, `email`, `password`, `codigoPropio`, `referidoPor`, `fechaRegistro`, `workspaceId`, `role`, `avatarUrl` FROM `users` ORDER BY `fechaRegistro` ASC, `id` ASC'),
-    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `records` ORDER BY `fechaIngreso` DESC, `id` DESC'),
+    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `records` ORDER BY `fechaIngreso` DESC, `id` DESC'),
     queryRows('SELECT `recordId`, `historial_index`, `fecha`, `accion` FROM `records_historial` ORDER BY `recordId` ASC, `historial_index` ASC'),
-    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `duplicateRecords` ORDER BY `fechaIngreso` DESC, `id` DESC'),
+    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `duplicateRecords` ORDER BY `fechaIngreso` DESC, `id` DESC'),
     queryRows('SELECT `recordId`, `historial_index`, `fecha`, `accion` FROM `duplicateRecords_historial` ORDER BY `recordId` ASC, `historial_index` ASC'),
     queryRows('SELECT `id`, `hash`, `date`, `count`, `teamMemberId`, `teamMemberName`, `teamMemberCode`, `workspaceId` FROM `sharedLinks` ORDER BY `date` DESC, `id` DESC'),
     queryRows('SELECT `sharedLinkId`, `viewed`, `worked`, `contacted` FROM `sharedLinks_metrics`'),
@@ -605,7 +606,7 @@ export async function writeDb(nextDb) {
     await insertRows(
       connection,
       'records',
-      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
+      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
       db.records.map((record) => ({
         id: record.id ?? null,
         nombre: record.nombre ?? '',
@@ -620,6 +621,7 @@ export async function writeDb(nextDb) {
         categoria: record.categoria ?? '',
         canal: record.canal ?? '',
         estadoProspeccion: record.estadoProspeccion ?? '',
+        stage: record.stage ?? '',
         mensajeEnviado: Boolean(record.mensajeEnviado),
         responsable: record.responsable ?? '',
         propietarioId: record.propietarioId ?? '',
@@ -657,7 +659,7 @@ export async function writeDb(nextDb) {
     await insertRows(
       connection,
       'duplicateRecords',
-      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
+      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
       db.duplicateRecords.map((record) => ({
         id: record.id ?? null,
         nombre: record.nombre ?? '',
@@ -672,6 +674,7 @@ export async function writeDb(nextDb) {
         categoria: record.categoria ?? '',
         canal: record.canal ?? '',
         estadoProspeccion: record.estadoProspeccion ?? '',
+        stage: record.stage ?? '',
         mensajeEnviado: Boolean(record.mensajeEnviado),
         responsable: record.responsable ?? '',
         propietarioId: record.propietarioId ?? '',
