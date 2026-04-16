@@ -201,12 +201,6 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
                   </span>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-medium">Pipeline</span>
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-bold ${activeStage.classes}`}>
-                    {activeStage.icon} {activeStage.label}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-medium">{t('common_sector')}</span>
                   <select
                     value={draft.sector || ''}

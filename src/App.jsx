@@ -256,6 +256,116 @@ function AppNoticeModal({ notice, onClose, isDarkMode = false }) {
   );
 }
 
+function WhatsAppApiView({ isDarkMode = false }) {
+  const leftCardClass = isDarkMode
+    ? 'border-white/10 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(16,16,18,0.92))] text-white'
+    : 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] text-slate-900';
+  const rightCardClass = isDarkMode
+    ? 'border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.98),rgba(16,16,18,0.94))] text-white'
+    : 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,251,0.96))] text-slate-900';
+  const softText = isDarkMode ? 'text-slate-300' : 'text-slate-600';
+  const mutedText = isDarkMode ? 'text-slate-400' : 'text-slate-500';
+
+  const benefits = [
+    'Verificación empresarial',
+    'Automatizaciones escalables',
+    'Sincronización con CRM',
+    'Plantillas aprobadas',
+  ];
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-[1450px] flex-col gap-5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h1 className={`text-3xl font-black tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp API</h1>
+            <p className={`mt-1 text-sm ${softText}`}>Conecta WhatsApp Web y la API oficial desde una sola pantalla.</p>
+          </div>
+          <div className={`hidden rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] sm:inline-flex ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+            Conexión
+          </div>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
+          <section className={`relative overflow-hidden rounded-[2rem] border p-6 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.32)] sm:p-8 ${leftCardClass}`}>
+            <div className={`absolute -left-10 top-6 h-40 w-40 rounded-full blur-3xl ${isDarkMode ? 'bg-[#25D366]/10' : 'bg-emerald-100/80'}`}></div>
+            <div className={`absolute right-0 top-0 h-48 w-48 rounded-full blur-3xl ${isDarkMode ? 'bg-orange-500/8' : 'bg-orange-100/60'}`}></div>
+
+            <div className="relative grid gap-8 xl:grid-cols-[0.42fr_0.58fr] xl:items-center">
+              <div className="flex max-w-md flex-col justify-center">
+                <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                  <MessageCircle size={12} />
+                  WhatsApp Web
+                </div>
+                <h2 className={`text-2xl font-black sm:text-3xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Web (QR)</h2>
+                <p className={`mt-3 max-w-xl text-sm leading-7 sm:text-[15px] ${softText}`}>
+                  Conecta tu dispositivo escaneando un código. Ideal para extraer prospectos de grupos y para automatizaciones de bajo volumen.
+                </p>
+                <button
+                  type="button"
+                  className="mt-7 inline-flex w-fit items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-6 py-3.5 text-sm font-black text-white shadow-[0_18px_36px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
+                >
+                  Generar Código QR
+                </button>
+              </div>
+
+              <div className={`rounded-[2rem] border p-6 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
+                <div className={`rounded-[1.5rem] border px-4 py-4 text-sm leading-7 ${isDarkMode ? 'border-white/8 bg-white/[0.03] text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600'}`}>
+                  Esta conexion quedara lista para mostrar el codigo QR y la previsualizacion movil cuando definamos la version final del modulo.
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className={`relative overflow-hidden rounded-[2rem] border p-6 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.32)] sm:p-8 ${rightCardClass}`}>
+            <div className={`absolute -right-8 top-10 h-36 w-36 rounded-full blur-3xl ${isDarkMode ? 'bg-violet-500/10' : 'bg-violet-100/70'}`}></div>
+            <div className="relative flex h-full flex-col justify-between gap-6">
+              <div>
+                <div className="mb-4 flex items-center gap-3">
+                  <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-violet-400/20 bg-violet-500/10 text-violet-300' : 'border-violet-100 bg-violet-50 text-violet-700'}`}>
+                    Recomendado
+                  </div>
+                  <div className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+                    Oficial
+                  </div>
+                </div>
+                <h2 className={`text-2xl font-black sm:text-3xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Business API</h2>
+                <p className={`mt-3 max-w-xl text-sm leading-7 sm:text-[15px] ${softText}`}>
+                  Conexión oficial para empresas. Requiere Facebook Business. Ideal para chatbots avanzados y envíos masivos sin riesgo de bloqueos.
+                </p>
+              </div>
+
+              <div className={`rounded-[1.75rem] border p-5 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/80'}`}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {benefits.map((item) => (
+                    <div key={item} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold ${isDarkMode ? 'bg-white/[0.04] text-slate-200' : 'bg-white text-slate-700 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.22)]'}`}>
+                      <CheckCircle size={16} className="text-emerald-500" />
+                      <span>{item}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-5 py-3 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
+                >
+                  Configurar API Oficial
+                </button>
+                <div className={`flex items-center gap-2 text-sm ${mutedText}`}>
+                  <Lock size={16} />
+                  Requiere acceso de Facebook Business
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const {
     usersDb,
@@ -785,7 +895,7 @@ export default function App() {
           <NavItem icon={<Target size={20} />} label={t('nav_sales')} active={activeTab === 'prospecting'} onClick={() => setActiveTab('prospecting')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
-
+          <NavItem icon={<MessageCircle size={20} />} label="WhatsApp API" active={activeTab === 'whatsapp-api'} onClick={() => setActiveTab('whatsapp-api')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <div className={`my-2 border-t border-slate-100 ${isSidebarCollapsed ? 'mx-4' : 'mx-6'}`}></div>
           <NavItem icon={<Users size={20} />} label={t('nav_team')} active={activeTab === 'network'} onClick={() => setActiveTab('network')} theme="purple" isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
         </nav>
@@ -945,6 +1055,7 @@ export default function App() {
         {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
         {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
         {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
+        {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} />}
         {activeTab === 'reports' && <ReportsView records={records} duplicateRecords={duplicateRecords} currentUser={currentUser} myAgents={myAgents} usersDb={usersDb} sharedLinks={sharedLinks} t={t} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'network' && <NetworkView currentUser={currentUser} usersDb={usersDb} sharedLinks={sharedLinks} records={records} onLinkCreated={handleCreateSharedLink} myAgents={myAgents} t={t} isDarkMode={isDarkMode} />}
         </div>

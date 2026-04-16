@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Download, FileText, MessageCircle, Play, User, Users, X } from 'lucide-react';
 import { ORIGENES, PAISES } from '../lib/constants';
 import { detectCountryCodeFromPhone } from '../lib/country';
@@ -180,7 +180,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     if (detected) setWaSector(detected);
   };
 
-  const decodeHtmlEntities = (value = '') => {
+  const decodeHtmlEntities = useCallback((value = '') => {
     if (typeof document === 'undefined') {
       return String(value || '');
     }
@@ -188,9 +188,9 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     const textarea = document.createElement('textarea');
     textarea.innerHTML = String(value || '');
     return textarea.value;
-  };
+  }, []);
 
-  const extractWhatsAppNumbers = (rawValue = '') => {
+  const extractWhatsAppNumbers = useCallback((rawValue = '') => {
     const raw = String(rawValue || '');
     const decodedRaw = decodeHtmlEntities(raw)
       .replace(/[\u200B-\u200D\uFEFF\u2060]/g, '')
@@ -256,7 +256,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         };
       })
       .filter(Boolean);
-  };
+  }, [decodeHtmlEntities]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -319,6 +319,8 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     const isOption1 = textLower.includes('sector:') && textLower.includes('numeros:');
     const isOption2 = textLower.includes('nombre completo') && (textLower.includes('telefono') || textLower.includes('teléfono'));
     const isIgCsv = massiveData.includes('source_username') && massiveData.includes('full_name');
+    const extractedBulkNumbers = !isOption1 && !isOption2 && !isIgCsv ? extractWhatsAppNumbers(massiveData) : [];
+    const isMixedBulkNumbers = extractedBulkNumbers.length > 0;
 
     if (isOption1) {
       let globalSectorName = '';
@@ -552,6 +554,57 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
           if (leadKey) batchSeenKeys.add(leadKey);
         }
       }
+    } else if (isMixedBulkNumbers) {
+      const detectedSector = resolveSectorId(massiveData) || autoDetectSector(massiveData) || '';
+      const sharedNote = 'Importado masivamente desde bloque de texto libre.';
+
+      extractedBulkNumbers.forEach(({ formatted, digits }) => {
+        const phoneKey = `phone:${digits}`;
+        const paisCode = detectCountryCodeFromPhone(formatted, 'OT');
+        const dateObj = new Date();
+        currentCount++;
+        const id = `BIG-${detectedSector || 'GEN'}-${paisCode}-${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(currentCount).padStart(4, '0')}`;
+
+        const candidateRecord = {
+          nombre: 'Lead importado',
+          pais: paisCode,
+          numero: formatted,
+          correo: '',
+          sector: detectedSector,
+          subsector: '',
+          origen: 'Importación Masiva',
+          fechaIngreso: getLocalISODate(dateObj),
+          nota: sharedNote,
+          id,
+          categoria: calculateImportedCategory({
+            hasNombre: true,
+            hasNumero: true,
+            hasCorreo: false,
+            hasPais: paisCode !== 'OT',
+            hasSector: Boolean(detectedSector),
+          }),
+          canal: 'Masivo',
+          estadoProspeccion: 'Nuevo',
+          stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
+          mensajeEnviado: false,
+          responsable: 'Sin Asignar',
+          propietarioId: currentUser.id,
+          workspaceId: currentUser.workspaceId,
+          inProspecting: false,
+          isArchived: false,
+          historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente desde texto mixto' }],
+        };
+        const leadKey = buildLeadIdentity(candidateRecord);
+        const existsInBatch = (leadKey && batchSeenKeys.has(leadKey)) || batchSeenKeys.has(phoneKey);
+
+        if (existsInBatch) {
+          newDuplicates.push(candidateRecord);
+        } else {
+          newRecords.push(candidateRecord);
+          if (leadKey) batchSeenKeys.add(leadKey);
+          batchSeenKeys.add(phoneKey);
+        }
+      });
     } else {
       const looksLikeHeaderValue = (value) => {
         const raw = String(value || '').trim().toLowerCase();
@@ -659,8 +712,22 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     }
   };
 
-  const detectedLines = massiveData.split('\n').filter(l => l.trim()).length;
-  const isIgCsvDetected = massiveData.includes('source_username') && massiveData.includes('full_name');
+  const bulkInputAnalysis = useMemo(() => {
+    const raw = String(massiveData || '');
+    const linesCount = raw.split('\n').filter((line) => line.trim()).length;
+    const lower = raw.toLowerCase();
+    const option1 = lower.includes('sector:') && lower.includes('numeros:');
+    const option2 = lower.includes('nombre completo') && (lower.includes('telefono') || lower.includes('teléfono'));
+    const igCsv = raw.includes('source_username') && raw.includes('full_name');
+    const extractedCount = !option1 && !option2 && !igCsv ? extractWhatsAppNumbers(raw).length : 0;
+
+    return {
+      detectedCount: extractedCount > 0 ? extractedCount : linesCount,
+      isIgCsvDetected: igCsv,
+    };
+  }, [extractWhatsAppNumbers, massiveData]);
+  const detectedLines = bulkInputAnalysis.detectedCount;
+  const isIgCsvDetected = bulkInputAnalysis.isIgCsvDetected;
 
   const detectedWaNumbers = waData ? extractWhatsAppNumbers(waData).length : 0;
 

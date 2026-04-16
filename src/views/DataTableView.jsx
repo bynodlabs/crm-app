@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { ESTADOS_PROSPECCION, ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
@@ -61,7 +61,6 @@ const downloadCsvFile = (filename, headers, rows) => {
 export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
   const { sectors, activeSectors } = useSectors();
   const [showFilters, setShowFilters] = useState(false);
-  const [showPipelineDropdown, setShowPipelineDropdown] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
   const [selectedDuplicateIds, setSelectedDuplicateIds] = useState([]);
@@ -192,10 +191,6 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
     if (directoryTab === 'archivados') return archiveSubtab === 'compartidos' ? 'Compartidos' : 'Archivo';
     return t('dir_tab_discarded');
   }, [archiveSubtab, directoryTab, t]);
-  const selectedPipelineMeta = useMemo(
-    () => (filters.stage === 'ALL' ? null : getPipelineStageMeta(filters.stage)),
-    [filters.stage],
-  );
   const activeCsvFields = useMemo(
     () => CSV_FIELD_OPTIONS.filter((field) => selectedCsvFields.includes(field.key)),
     [selectedCsvFields],
@@ -245,9 +240,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   const handleDirectoryTabChange = (nextTab) => {
     setDirectoryTab(nextTab);
     setShowExportPanel(false);
-    if (nextTab !== 'archivados') {
-      setArchiveSubtab('archivados');
-    }
+    setArchiveSubtab('archivados');
     setCurrentPage(1);
     setSelectionScopeKey(`tab:${nextTab}`);
     setSelectedIds([]);
@@ -366,112 +359,56 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   const activeFiltersCount = Object.values(filters).filter(v => v !== 'ALL').length + (globalSectorFilter !== 'ALL' ? 1 : 0);
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col overflow-x-hidden overflow-y-auto bg-slate-50/30 p-4 sm:p-6 lg:overflow-hidden lg:p-8">
+    <div className="relative flex h-full min-h-0 max-h-full flex-1 basis-0 flex-col overflow-hidden bg-slate-50/30 p-4 sm:p-6 lg:p-8">
       <div className={`absolute top-1/4 right-10 w-[30rem] h-[30rem] bg-[#FF5A1F] rounded-full blur-[120px] pointer-events-none ${isDarkMode ? 'opacity-20' : 'hidden sm:block opacity-20'}`}></div>
       <div className={`absolute bottom-10 left-10 w-[30rem] h-[30rem] bg-purple-500 rounded-full blur-[120px] pointer-events-none ${isDarkMode ? 'opacity-15' : 'hidden sm:block opacity-15'}`}></div>
 
-      <div className="relative z-10 mb-6 flex flex-col items-start justify-between gap-4 xl:flex-row xl:items-end">
+      <div className="relative z-30 mb-6 shrink-0 flex flex-col items-start justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <h2 className="text-2xl font-black text-slate-800">{t('dir_title')}</h2>
           <div className="mt-3 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
             <div className="relative flex w-full rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-fit">
-              <div className="relative flex items-center">
-                <button type="button" onClick={() => handleDirectoryTabChange('nuevos')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'nuevos' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
-                  Leads
+              <button
+                type="button"
+                onClick={() => handleDirectoryTabChange('nuevos')}
+                className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
+                  directoryTab === 'nuevos'
+                    ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                Leads
+              </button>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => handleDirectoryTabChange('archivados')}
+                  className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'archivados' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Archivo
                 </button>
-                {directoryTab === 'nuevos' && (
-                  <button
-                    type="button"
-                    onClick={() => setShowPipelineDropdown((prev) => !prev)}
-                    className={`ml-1 inline-flex h-9 w-9 items-center justify-center rounded-lg transition-all ${
-                      showPipelineDropdown || selectedPipelineMeta
-                        ? 'bg-white text-[#FF5A1F] shadow-sm'
-                        : 'text-slate-500 hover:bg-white/80 hover:text-slate-700'
-                    }`}
-                    title="Filtrar pipeline"
-                  >
-                    <ChevronDown size={16} className={`transition-transform ${showPipelineDropdown ? 'rotate-180' : ''}`} />
-                  </button>
-                )}
-                {directoryTab === 'nuevos' && showPipelineDropdown && (
-                  <div className="absolute left-0 top-[calc(100%+0.55rem)] z-30 w-[220px] rounded-2xl border border-slate-200 bg-white p-2 shadow-[0_18px_40px_-22px_rgba(15,23,42,0.35)]">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFilters((prev) => ({ ...prev, stage: 'ALL' }));
-                        setCurrentPage(1);
-                        clearSelection();
-                        setShowPipelineDropdown(false);
-                      }}
-                      className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
-                        filters.stage === 'ALL'
-                          ? 'bg-slate-900 text-white'
-                          : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="text-sm">◌</span> Todos los leads
-                    </button>
-                    {pipelineOptions.map((stage) => (
+                {directoryTab === 'archivados' && (
+                  <div className="absolute left-1/2 top-[calc(100%+0.08rem)] z-40 flex -translate-x-1/2 flex-col items-center">
+                    <div className="animate-in slide-in-from-top-1 fade-in duration-200">
                       <button
-                        key={stage.id}
                         type="button"
-                        onClick={() => {
-                          setFilters((prev) => ({ ...prev, stage: stage.id }));
-                          setCurrentPage(1);
-                          clearSelection();
-                          setShowPipelineDropdown(false);
-                        }}
-                        className={`mt-1 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
-                          filters.stage === stage.id
-                            ? 'bg-orange-50 text-[#FF5A1F]'
-                            : 'text-slate-600 hover:bg-slate-50'
+                        onClick={() => handleArchiveSubtabChange('compartidos')}
+                        className={`rounded-xl border px-4 py-2 text-xs font-bold transition-all ${
+                          archiveSubtab === 'compartidos'
+                            ? 'border-orange-200 bg-gradient-to-r from-[#FF3C00] via-[#FF7A00] to-[#FFB36B] text-white shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-orange-200 hover:text-[#FF5A1F]'
                         }`}
                       >
-                        <span>{stage.icon}</span> {stage.label}
+                        Compartidos
                       </button>
-                    ))}
+                    </div>
                   </div>
                 )}
               </div>
-              <button type="button" onClick={() => handleDirectoryTabChange('archivados')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'archivados' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
-                Archivo
-              </button>
               <button type="button" onClick={() => handleDirectoryTabChange('descartados')} className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${directoryTab === 'descartados' ? 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-purple-500 text-white shadow-[0_10px_24px_-14px_rgba(147,51,234,0.55)] sm:from-[#FF3C00] sm:via-[#FF7A00] sm:to-[#FFB36B] sm:shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}>
                 {t('dir_tab_discarded')}
               </button>
             </div>
-            {directoryTab === 'archivados' && (
-              <div className="flex w-full rounded-xl border border-slate-200 bg-slate-100 p-1 sm:w-fit">
-                <button
-                  type="button"
-                  onClick={() => handleArchiveSubtabChange('archivados')}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${archiveSubtab === 'archivados' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Archivados
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleArchiveSubtabChange('compartidos')}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${archiveSubtab === 'compartidos' ? 'bg-gradient-to-r from-[#FF3C00] via-[#FF7A00] to-[#FFB36B] text-white shadow-[0_10px_24px_-14px_rgba(255,90,31,0.45)]' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Compartidos
-                </button>
-              </div>
-            )}
-            {directoryTab === 'nuevos' && selectedPipelineMeta && (
-              <button
-                type="button"
-                onClick={() => {
-                  setFilters((prev) => ({ ...prev, stage: 'ALL' }));
-                  setCurrentPage(1);
-                  clearSelection();
-                }}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-bold ${selectedPipelineMeta.classes}`}
-              >
-                {selectedPipelineMeta.icon} {selectedPipelineMeta.label}
-                <X size={12} />
-              </button>
-            )}
             <p className="ml-1 text-xs font-medium text-slate-400 sm:ml-2">
               {t('dir_showing')} {directoryTotal} {t('dir_prospects')} {directoryTotal > 0 && <span className="ml-1">· página {currentDisplayPage}/{directoryTotalPages}</span>}
             </p>
@@ -543,7 +480,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
       </div>
 
       {showFilters && (
-        <div className="mb-6 animate-in slide-in-from-top-4 fade-in rounded-[2rem] border border-slate-100 bg-white p-4 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] duration-200 sm:p-6">
+        <div className="mb-6 shrink-0 animate-in slide-in-from-top-4 fade-in rounded-[2rem] border border-slate-100 bg-white p-4 shadow-[0_10px_30px_-15px_rgba(0,0,0,0.05)] duration-200 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-sm text-slate-800 uppercase tracking-wider flex items-center gap-2">
               <Sliders size={16} className="text-[#FF5A1F]" /> {t('dir_filters_title')}
@@ -866,7 +803,6 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                     </label>
                   ) : null}
                 </th>
-                <th className="pb-4 pl-2">{t('dir_th_id')}</th>
                 <th className="pb-4">{t('dir_th_profile')}</th>
                 <th className="pb-4">{t('dir_th_sector')}</th>
                 <th className="pb-4 text-center">{t('dir_th_quality')}</th>
@@ -876,9 +812,6 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
             <tbody className="divide-y divide-slate-50">
               {visibleRecords.length > 0 ? visibleRecords.map((r) => {
                 const paisData = getCountryMetaForRecord(r);
-                const idParts = r.id.split('-');
-                const idPrefix = idParts.slice(0, -1).join('-') + '-';
-                const idSuffix = idParts[idParts.length - 1];
                 const ownerData = myAgents.find(a => a.nombre === r.responsable) || myAgents[0];
                 const inProspecting = countsAsProspecting(r);
                 const sectorLabel = sectorNameById[r.sector] || r.sector;
@@ -900,12 +833,6 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                           </div>
                         </label>
                       ) : null}
-                    </td>
-                    <td className="py-4 pl-2">
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400 font-mono tracking-widest uppercase">{idPrefix}</span>
-                        <span className="font-mono text-sm font-black text-slate-800 tracking-wider">{idSuffix}</span>
-                      </div>
                     </td>
                     <td className="py-4">
                       <div className="flex items-center gap-3">
@@ -930,9 +857,9 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                       <div className="text-xs text-slate-400 truncate max-w-[150px] mt-0.5">{r.subsector || r.origen}</div>
                     </td>
                     <td className="py-4 text-center">
-                      <div className="flex flex-col items-center gap-2">
+                      <div className="flex items-center justify-center gap-2">
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-[10px] font-black shadow-sm ${r.categoria === 'A' ? 'bg-emerald-100 text-emerald-600' : r.categoria === 'B' ? 'bg-orange-100 text-[#FF5A1F]' : r.categoria === 'C' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'}`}>{r.categoria}</span>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${stageMeta.classes}`}>{stageMeta.icon} {stageMeta.shortLabel}</span>
+                        <span className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-bold ${stageMeta.classes}`}>{stageMeta.icon} {stageMeta.shortLabel}</span>
                       </div>
                     </td>
                     <td className="py-4 text-right pr-6 flex justify-end gap-2 items-center h-full">
@@ -954,7 +881,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                 );
               }) : (
                 <tr>
-                  <td colSpan="6" className="py-16 text-center">
+                  <td colSpan="5" className="py-16 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Filter size={32} className="text-slate-300 mb-3" />
                       <p className="text-sm font-medium text-slate-500 mb-1">{t('dir_no_matches')}</p>
