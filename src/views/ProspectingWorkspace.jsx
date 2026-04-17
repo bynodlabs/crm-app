@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Archive, ArrowRight, CheckCircle, Clock, Edit2, FileText, List, Lock, Mail, MessageCircle, Phone, RefreshCw, Search, Target, Trash2, X, Zap } from 'lucide-react';
+import { Archive, ArrowRight, CheckCircle, Clock, Edit2, FileText, List, Lock, Mail, Phone, RefreshCw, Search, Target, Trash2, X, Zap } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
+import whatsappIconWhite from '../assets/whatsapp-icon-white.svg';
 import { ESTADOS_PROSPECCION } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
@@ -438,7 +439,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
                     <Edit2 size={16} />
                   </button>
                   <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleQuickWhatsApp(activeLead); }} className="flex h-[46px] flex-1 items-center justify-center gap-2 rounded-r-xl border-y border-r border-green-500 bg-green-500 px-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)] transition-all hover:bg-green-600 sm:flex-none sm:px-5">
-                    <MessageCircle size={18} /> {t('ws_start_conversation')}
+                    <img src={whatsappIconWhite} alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" /> {t('ws_start_conversation')}
                   </button>
                 </div>
 
@@ -609,7 +610,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
                   <Edit2 size={18} />
                 </button>
                 <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleQuickWhatsApp(activeLead); }} className="flex h-[50px] flex-1 items-center justify-center gap-2 rounded-r-xl border-y border-r border-green-500 bg-green-500 px-4 text-sm font-bold text-white shadow-[0_4px_14px_rgba(34,197,94,0.3)] transition-all hover:bg-green-600">
-                  <MessageCircle size={18} /> {t('ws_start_conversation')}
+                  <img src={whatsappIconWhite} alt="" aria-hidden="true" className="h-[18px] w-[18px] shrink-0" /> {t('ws_start_conversation')}
                 </button>
               </div>
             </div>

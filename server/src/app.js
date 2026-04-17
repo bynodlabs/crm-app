@@ -8,6 +8,7 @@ import { recordService } from './services/record-service.js';
 import { sectorService } from './services/sector-service.js';
 import { sharedLinkService } from './services/shared-link-service.js';
 import { userService } from './services/user-service.js';
+import { whatsappService } from './services/whatsapp-service.js';
 
 const withCors = (res) => {
   res.setHeader('Access-Control-Allow-Origin', config.corsOrigin);
@@ -105,6 +106,41 @@ export async function handleRequest(req, res) {
     if (!authUser) return;
     const users = await userService.listUsers(authUser);
     sendJson(res, 200, { items: users });
+    return;
+  }
+
+  if (pathname === '/api/wa/qr' && req.method === 'GET') {
+    console.log('[wa][route] GET /api/wa/qr - request received');
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    console.log('[wa][route] GET /api/wa/qr - authenticated workspace:', authUser.workspaceId);
+    const result = await whatsappService.getQr(authUser.workspaceId);
+    console.log('[wa][route] GET /api/wa/qr - responding with status:', result.status);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  if (pathname === '/api/wa/status' && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await whatsappService.getStatus(authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  if (pathname === '/api/wa/groups' && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await whatsappService.listGroups(authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  if (pathname === '/api/wa/disconnect' && req.method === 'POST') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await whatsappService.disconnect(authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
     return;
   }
 
@@ -359,6 +395,18 @@ export async function handleRequest(req, res) {
     const authUser = await getAuthenticatedUser(req, res);
     if (!authUser) return;
     const result = await sectorService.deleteSector(sectorMatch[1], authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  const waGroupParticipantsMatch = pathname.match(/^\/api\/wa\/groups\/([^/]+)\/participants$/);
+  if (waGroupParticipantsMatch && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await whatsappService.listGroupParticipants(
+      authUser.workspaceId,
+      decodeURIComponent(waGroupParticipantsMatch[1]),
+    );
     sendJson(res, result.status, result.payload);
     return;
   }

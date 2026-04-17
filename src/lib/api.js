@@ -115,6 +115,28 @@ export const api = {
     });
   },
 
+  getWhatsAppQr() {
+    return apiRequest('/wa/qr');
+  },
+
+  getWhatsAppStatus() {
+    return apiRequest('/wa/status');
+  },
+
+  listWhatsAppGroups() {
+    return apiRequest('/wa/groups');
+  },
+
+  listWhatsAppGroupParticipants(groupId) {
+    return apiRequest(`/wa/groups/${encodeURIComponent(groupId)}/participants`);
+  },
+
+  disconnectWhatsApp() {
+    return apiRequest('/wa/disconnect', {
+      method: 'POST',
+    });
+  },
+
   adminOverview(params = {}) {
     return apiRequest(`/admin/overview${buildQueryString(params)}`);
   },

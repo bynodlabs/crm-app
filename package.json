@@ -18,8 +18,11 @@
     "test:sim:all": "npm run test:sim:core && npm run test:sim:duplicates && npm run test:sim:workspace"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.21",
+    "dotenv": "^17.4.2",
     "lucide-react": "^1.7.0",
     "mysql2": "^3.21.1",
+    "qrcode": "^1.5.4",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
