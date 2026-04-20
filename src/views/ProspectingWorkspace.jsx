@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, ArrowRight, Bot, Check, CheckCircle, ChevronDown, Clock, Copy, Download, Edit2, FileText, Headphones, ImageIcon, List, Lock, Mail, Mic, MoreVertical, Phone, Pin, Plus, RefreshCw, Reply, Search, Smile, Star, Store, Target, Trash2, UserRound, X, Zap } from 'lucide-react';
+import { Archive, ArrowRight, Bot, Check, CheckCircle, ChevronDown, Clock, Copy, Download, Edit2, FileText, Headphones, ImageIcon, List, Lock, Mail, MessageCircle, Mic, MoreVertical, Phone, Pin, Plus, RefreshCw, Reply, Search, Smile, Star, Store, Target, Trash2, UserRound, X, Zap } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
+import chatWallpaperDark from '../assets/chat-wallpaper-dark.svg';
+import chatWallpaperLight from '../assets/chat-wallpaper-light.svg';
 import whatsappIconWhite from '../assets/whatsapp-icon-white.svg';
 import { api } from '../lib/api';
 import { ESTADOS_PROSPECCION } from '../lib/constants';
@@ -1595,8 +1597,8 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
     return (
       <>
         {quotedBlock}
-        <p className="whitespace-pre-wrap break-words text-[14px] font-normal leading-[1.45]">{message.text}</p>
-        <div className={`mt-1.5 flex items-center justify-end gap-1 text-[10px] font-medium ${timeClass}`}>
+        <p className="whitespace-pre-wrap break-words pt-2 text-[14px] font-normal leading-[1.45]">{message.text}</p>
+        <div className={`mt-0 flex items-center justify-end gap-1 text-[10px] font-medium ${timeClass}`}>
           <span>{formatChatTimestamp(message.timestamp, locale)}</span>
           {isOutgoing && <span className="shrink-0">{chatStatus}</span>}
         </div>
@@ -1621,7 +1623,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
         emptyCard: 'bg-[#202c33]/78 border border-white/[0.06] text-[#aebac1] backdrop-blur-xl shadow-[0_16px_38px_-30px_rgba(0,0,0,0.75)]',
         topBadge: 'bg-[#202c33]/82 text-[#d4dbe0] border border-white/[0.07] backdrop-blur-xl shadow-[0_14px_32px_-28px_rgba(0,0,0,0.7)]',
         wallpaperBase: '#0b141a',
-        wallpaperPattern: 'radial-gradient(rgba(255,255,255,0.02) 0.9px, transparent 0.9px), linear-gradient(180deg, rgba(255,255,255,0.01), transparent 35%), linear-gradient(135deg, rgba(255,255,255,0.009) 25%, transparent 25%)',
+        wallpaperImage: `url(${chatWallpaperDark})`,
       }
     : {
         shell: 'bg-[#efeae2] border-l border-slate-200/80',
@@ -1639,8 +1641,11 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
         emptyCard: 'bg-white/72 border border-white/85 text-[#667781] backdrop-blur-xl shadow-[0_14px_36px_-28px_rgba(15,23,42,0.2)]',
         topBadge: 'bg-white/76 text-[#536471] border border-white/85 backdrop-blur-xl shadow-[0_12px_28px_-26px_rgba(15,23,42,0.2)]',
         wallpaperBase: '#efeae2',
-        wallpaperPattern: 'radial-gradient(rgba(17,27,33,0.028) 0.9px, transparent 0.9px), linear-gradient(180deg, rgba(255,255,255,0.32), transparent 40%), linear-gradient(135deg, rgba(17,27,33,0.015) 25%, transparent 25%)',
+        wallpaperImage: `url(${chatWallpaperLight})`,
       };
+  const shouldShowChatEmptyState = !isLoadingChat && !chatError && (!activeLead || filteredChatMessages.length === 0);
+  const emptyStateTitle = !activeLead ? t('ws_chat_empty_title') : t('ws_chat_no_messages');
+  const emptyStateDescription = !activeLead ? t('ws_chat_empty_desc') : t('ws_chat_no_messages_desc');
 
   return (
     <div className={`hidden min-h-0 flex-1 flex-col lg:flex ${panelTheme.shell}`}>
@@ -1708,12 +1713,31 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
         className="relative flex-1 overflow-y-auto px-5 py-4"
         style={{
           backgroundColor: panelTheme.wallpaperBase,
-          backgroundImage: panelTheme.wallpaperPattern,
-          backgroundSize: '24px 24px, 100% 100%, 48px 48px',
-          backgroundPosition: '0 0, 0 0, 24px 24px',
+          backgroundImage: panelTheme.wallpaperImage,
+          backgroundRepeat: 'repeat',
+          backgroundSize: '240px 240px',
+          backgroundPosition: 'center top',
         }}
       >
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.03] via-transparent to-black/[0.03]"></div>
+
+        {(isLoadingChat || chatError || shouldShowChatEmptyState) && (
+          <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-6">
+            <div className={`mx-auto flex max-w-md flex-col items-center rounded-[1.8rem] px-8 py-8 text-center ${panelTheme.emptyCard}`}>
+              <div className={`mb-4 flex h-14 w-14 items-center justify-center rounded-full ${isDarkMode ? 'bg-white/5 text-white/80' : 'bg-white/80 text-[#667781]'}`}>
+                {chatError ? <RefreshCw size={24} /> : <MessageCircle size={24} />}
+              </div>
+              <h3 className={`text-[22px] font-semibold tracking-[-0.02em] ${panelTheme.title}`}>
+                {isLoadingChat ? t('ws_chat_loading') : chatError || emptyStateTitle}
+              </h3>
+              {!isLoadingChat && (
+                <p className={`mt-2 max-w-[28rem] text-[14px] leading-6 ${panelTheme.subtitle}`}>
+                  {chatError || emptyStateDescription}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="relative mx-auto flex max-w-[45rem] flex-col gap-2">
           {filteredChatMessages.map((message, index) => {
@@ -2952,9 +2976,6 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
                 <div className="flex items-start gap-3.5">
                   <div className="relative shrink-0 pt-0.5">
                     <AvatarInitials name={inboxName} size="md" avatarUrl={record.__avatarUrl || ''} isDarkMode={isDarkMode} />
-                    {unreadCount > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 rounded-full border-2 border-white bg-[#25D366]"></span>
-                    )}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
@@ -2977,21 +2998,23 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
                         </div>
                       </div>
                     </div>
-                    <div className="mt-1.5 flex items-center gap-1.5 pr-2">
-                      {hasAutomatedSnippet && <Bot size={12} className="shrink-0 text-amber-500" />}
-                      <p className="truncate text-[13px] leading-5 text-[#667781]">
-                        {inboxSnippet}
-                      </p>
+                    <div className="mt-1.5 flex items-center justify-between gap-2 pr-2">
+                      <div className="min-w-0 flex items-center gap-1.5">
+                        {hasAutomatedSnippet && <Bot size={12} className="shrink-0 text-amber-500" />}
+                        <p className="truncate text-[13px] leading-5 text-[#667781]">
+                          {inboxSnippet}
+                        </p>
+                      </div>
+                      {unreadCount > 0 && (
+                        <span className="inline-flex shrink-0 min-w-[1.2rem] items-center justify-center rounded-full bg-[#25D366] px-1.5 py-[0.1rem] text-[9px] font-bold leading-none text-white shadow-[0_6px_14px_-10px_rgba(37,211,102,0.9)]">
+                          {unreadCount}
+                        </span>
+                      )}
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5">
                         {record.isArchived && <Archive size={14} className="text-amber-500" title={t('ws_archived_lead')} />}
                         {record.mensajeEnviado && <CheckCircle size={14} className="text-green-500" title={t('ws_message_sent')} />}
-                        {unreadCount > 0 && (
-                          <span className="rounded-full bg-[#25D366] px-2 py-0.5 text-[10px] font-bold text-white">
-                            {unreadCount}
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>

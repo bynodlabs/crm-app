@@ -1388,7 +1388,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
             <div className="rounded-[1.85rem] border border-slate-200/70 bg-white/70 px-4 py-3 shadow-sm shadow-slate-200/40 backdrop-blur-sm sm:px-5 sm:py-3.5">
               <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-400">WhatsApp</p>
+                  <p className="text-xs font-bold uppercase tracking-normal leading-none text-slate-400">WhatsApp</p>
                   <h3 className="mt-1.5 text-base font-black leading-tight text-slate-800 sm:text-lg xl:text-[1.55rem]">Elige cómo importar tus contactos</h3>
                 </div>
                 <div className="grid grid-cols-1 gap-1.5 rounded-[1.15rem] border border-slate-200 bg-slate-50 p-1.5 shadow-inner sm:grid-cols-2 lg:min-w-[380px]">
@@ -1426,7 +1426,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                 <div className="flex flex-col gap-4">
                   <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                     <div>
-                      <p className="text-xs font-bold uppercase tracking-[0.28em] text-slate-400">WhatsApp QR Group</p>
+                      <p className="text-xs font-bold uppercase tracking-normal leading-none text-slate-400">WhatsApp QR Group</p>
                       <h3 className="mt-1 text-base font-black text-slate-800 sm:text-lg">Extrae contactos desde un grupo conectado</h3>
                       <p className="mt-1 max-w-2xl text-sm text-slate-500">
                         Carga tus grupos vinculados, selecciona uno y revisa los contactos antes de exportarlos o enviarlos al directorio.
@@ -1558,9 +1558,16 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
                     <div className="flex min-w-0 flex-col gap-3">
                       <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white/80 shadow-inner shadow-slate-100">
-                        <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-2">
-                          <div className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
-                            {selectedWaQrCount} seleccionados · {waQrAdminCount} admins · {selectedWaQrGroupsData.length} grupos
+                        <div className="flex items-start justify-between gap-3 border-b border-slate-200/70 px-4 py-2">
+                          <div className="space-y-1">
+                            <div className="text-xs font-bold uppercase tracking-normal leading-none text-emerald-600">
+                              {selectedWaQrCount} seleccionados
+                            </div>
+                            <div className="text-xs font-bold uppercase tracking-normal leading-none text-slate-400">
+                              <span className="text-red-500">{waQrAdminCount} admins</span>
+                              <span className="px-1.5 text-slate-300">·</span>
+                              <span>{selectedWaQrGroupsData.length} grupos</span>
+                            </div>
                           </div>
                           <div className="text-xs text-slate-400">
                             Los admins se excluyen por defecto.

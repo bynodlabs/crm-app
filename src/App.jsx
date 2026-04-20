@@ -258,7 +258,7 @@ function AppNoticeModal({ notice, onClose, isDarkMode = false }) {
   );
 }
 
-function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
+function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser = null, onVerifySession = null }) {
   const [qrState, setQrState] = useState('loading');
   const [qrImage, setQrImage] = useState('');
   const [linkedProfileLabel, setLinkedProfileLabel] = useState('');
@@ -280,6 +280,14 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
     'Sincronización con CRM',
     'Plantillas aprobadas',
   ];
+  const getMissingSessionMessage = useCallback(() => {
+    if (currentUser?.id) {
+      return 'Esta cuenta está abierta solo en modo local y no tiene token activo del backend. Para generar el QR necesitas una sesión autenticada contra el backend.';
+    }
+
+    return 'Tu sesión actual no está conectada al backend. Cierra sesión e inicia sesión nuevamente para generar el QR.';
+  }, [currentUser?.id]);
+
   const clearStatusPoll = useCallback(() => {
     if (statusPollRef.current) {
       window.clearInterval(statusPollRef.current);
@@ -337,7 +345,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
       clearStatusPoll();
       setQrState('auth');
       setQrImage('');
-      setQrFeedback('Tu sesión actual no está conectada al backend. Cierra sesión e inicia sesión nuevamente para generar el QR.');
+      setQrFeedback(getMissingSessionMessage());
       return;
     }
 
@@ -362,7 +370,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
     } finally {
       setIsQrBusy(false);
     }
-  }, [applyConnectionState, clearStatusPoll, sessionToken]);
+  }, [applyConnectionState, clearStatusPoll, getMissingSessionMessage, sessionToken]);
 
   const handleDisconnectQr = useCallback(async () => {
     setIsQrBusy(true);
@@ -378,12 +386,56 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
     }
   }, [handleReloadQr]);
 
+  const handleVerifyCurrentSession = useCallback(async () => {
+    if (!onVerifySession) {
+      await handleReloadQr();
+      return;
+    }
+
+    setIsQrBusy(true);
+    setQrFeedback('');
+
+    try {
+      const result = await onVerifySession();
+      if (result?.ok) {
+        await handleReloadQr();
+        return;
+      }
+
+      if (result?.reason === 'missing_token') {
+        clearStatusPoll();
+        setQrState('auth');
+        setQrImage('');
+        setQrFeedback(getMissingSessionMessage());
+        return;
+      }
+
+      if (result?.reason === 'unauthorized') {
+        clearStatusPoll();
+        setQrState('auth');
+        setQrImage('');
+        setQrFeedback('Tu token del backend ya expiró o dejó de ser válido. Cierra sesión e inicia sesión nuevamente para generar el QR.');
+        return;
+      }
+
+      setQrState('auth');
+      setQrImage('');
+      setQrFeedback('No se pudo verificar tu sesión con el backend. Intenta nuevamente en unos segundos.');
+    } catch {
+      setQrState('auth');
+      setQrImage('');
+      setQrFeedback('No se pudo verificar tu sesión con el backend. Intenta nuevamente en unos segundos.');
+    } finally {
+      setIsQrBusy(false);
+    }
+  }, [clearStatusPoll, getMissingSessionMessage, handleReloadQr, onVerifySession]);
+
   useEffect(() => {
     if (!sessionToken) {
       clearStatusPoll();
       setQrState('auth');
       setQrImage('');
-      setQrFeedback('Tu sesión actual no está conectada al backend. Cierra sesión e inicia sesión nuevamente para generar el QR.');
+      setQrFeedback(getMissingSessionMessage());
       return undefined;
     }
 
@@ -410,7 +462,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
       isMounted = false;
       clearStatusPoll();
     };
-  }, [clearStatusPoll, fetchWaStatus, handleReloadQr, sessionToken]);
+  }, [clearStatusPoll, fetchWaStatus, getMissingSessionMessage, handleReloadQr, sessionToken]);
 
   const renderQrContent = () => {
     if (qrState === 'loading') {
@@ -470,11 +522,11 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null }) {
               </p>
               <button
                 type="button"
-                onClick={handleReloadQr}
+                onClick={handleVerifyCurrentSession}
                 disabled={isQrBusy}
-                className="rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5"
+                className={`rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5 ${isQrBusy ? 'cursor-not-allowed opacity-70' : ''}`}
               >
-                Verificar sesión
+                {isQrBusy ? 'Verificando...' : 'Verificar sesión'}
               </button>
             </div>
           </div>
@@ -647,6 +699,7 @@ export default function App() {
     handleUpdateProfile,
     handleImpersonate,
     handleReturnToAdmin,
+    handleVerifySession,
     handleLogout,
   } = useSessionState();
   const [language, setLanguage] = useLanguage('es', currentUser?.id || 'guest');
@@ -1322,7 +1375,7 @@ export default function App() {
         {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} onCreateRecord={handleCreateRecord} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
         {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
         {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
-        {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} />}
+        {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} currentUser={currentUser} onVerifySession={handleVerifySession} />}
         {activeTab === 'reports' && <ReportsView records={records} duplicateRecords={duplicateRecords} currentUser={currentUser} myAgents={myAgents} usersDb={usersDb} sharedLinks={sharedLinks} t={t} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'tools' && <ToolsView isDarkMode={isDarkMode} onOpenShareLeads={() => setActiveTab('network')} />}
         {activeTab === 'network' && <NetworkView currentUser={currentUser} usersDb={usersDb} sharedLinks={sharedLinks} records={records} onLinkCreated={handleCreateSharedLink} myAgents={myAgents} t={t} isDarkMode={isDarkMode} />}
@@ -2217,10 +2270,6 @@ function CleanDashboardView({
                         </thead>
                         <tbody className={isDarkMode ? 'divide-y divide-white/10' : 'divide-y divide-slate-100'}>
                           {paginatedGlobalLeadRows.map((record) => {
-                            const ownerLabel =
-                              userNameById.get(record.propietarioId) ||
-                              record.responsable ||
-                              'Sin asignar';
                             const isSelected = validSelectedGlobalShareIds.includes(record.id);
                             return (
                               <tr key={record.id} className={isDarkMode ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50/60'}>
@@ -2249,10 +2298,8 @@ function CleanDashboardView({
                                     <p className={`mt-1 truncate font-mono text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{record.id}</p>
                                   </div>
                                 </td>
-                                <td className="px-4 py-4 align-top">
-                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
-                                    isDarkMode ? 'bg-white/[0.05] text-slate-300' : 'bg-slate-100 text-slate-600'
-                                  }`}>{ownerLabel}</span>
+                                <td className={`px-4 py-4 align-top text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
+                                  {record.sector || 'Sin sector'}
                                 </td>
                                 <td className="px-4 py-4 align-top">
                                   <div className="text-sm">
@@ -2275,9 +2322,6 @@ function CleanDashboardView({
                                     {record.estadoProspeccion || 'Nuevo'}
                                   </span>
                                 </td>
-                                <td className={`px-4 py-4 align-top text-sm ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
-                                  {record.sector || 'Sin sector'}
-                                </td>
                                 <td className={`px-4 py-4 text-right align-top text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                                   {record.fechaIngreso ? new Date(record.fechaIngreso).toLocaleDateString(locale) : '--/--/----'}
                                 </td>
@@ -2290,10 +2334,6 @@ function CleanDashboardView({
 
                     <div className="space-y-3 md:hidden">
                       {paginatedGlobalLeadRows.map((record) => {
-                        const ownerLabel =
-                          userNameById.get(record.propietarioId) ||
-                          record.responsable ||
-                          'Sin asignar';
                         const isSelected = validSelectedGlobalShareIds.includes(record.id);
                         return (
                           <div key={`mobile-global-lead-${record.id}`} className={`rounded-[1.5rem] border p-4 ${
@@ -2305,9 +2345,6 @@ function CleanDashboardView({
                                 <p className={`mt-1 truncate font-mono text-[11px] ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>{record.id}</p>
                               </div>
                               <div className="flex items-center gap-2">
-                                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                                  isDarkMode ? 'bg-white/[0.05] text-slate-300' : 'bg-white text-slate-600'
-                                }`}>{ownerLabel}</span>
                                 {globalLeadTab === 'shareable' && (
                                   <button
                                     type="button"

@@ -408,6 +408,27 @@ export function useSessionState() {
     setAdminReturnData(null);
   };
 
+  const handleVerifySession = async () => {
+    if (!sessionToken) {
+      return { ok: false, reason: 'missing_token' };
+    }
+
+    try {
+      const result = await api.me();
+      setCurrentUser(applyProfileOverride(result.user));
+      return { ok: true, user: result.user };
+    } catch (error) {
+      if (error?.status === 401) {
+        setSessionToken(null);
+        setCurrentUser(null);
+        setAdminReturnData(null);
+        return { ok: false, reason: 'unauthorized', error };
+      }
+
+      return { ok: false, reason: 'request_failed', error };
+    }
+  };
+
   const handleLogout = () => {
     api.logout().catch(() => {
       // Allow local cleanup if backend is unavailable.
@@ -433,6 +454,7 @@ export function useSessionState() {
     handleUpdateProfile,
     handleImpersonate,
     handleReturnToAdmin,
+    handleVerifySession,
     handleLogout,
   };
 }

@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { ESTADOS_PROSPECCION, ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
@@ -12,6 +12,7 @@ const isLiquidatedLead = (record) => record.estadoProspeccion === 'Liquidado';
 const isDiscardedLead = (record) => record.estadoProspeccion === 'Descartado';
 const isArchivedLead = (record) => (record.estadoProspeccion === 'Archivado' || record.isArchived) && !isDiscardedLead(record) && !isLiquidatedLead(record);
 const countsAsProspecting = (record) => record.estadoProspeccion !== 'Nuevo' && !isDiscardedLead(record) && !isLiquidatedLead(record);
+const normalizePhoneDigits = (value = '') => String(value || '').replace(/\D/g, '');
 const CSV_FIELD_OPTIONS = [
   { key: 'id', label: 'ID', getValue: (record) => record.id || '' },
   { key: 'nombre', label: 'Nombre', getValue: (record) => record.nombre || '' },
@@ -121,15 +122,20 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
 
   const filteredRecords = useMemo(() => {
     const searchLower = deferredSearchTerm.toLowerCase();
+    const searchDigits = normalizePhoneDigits(deferredSearchTerm);
 
     return tabScopedRecords.filter((record) => {
-      const sectorName = sectorNameById[record.sector] || '';
+      const recordName = String(record?.nombre || '').toLowerCase();
+      const recordId = String(record?.id || '').toLowerCase();
+      const recordEmail = String(record?.correo || '').toLowerCase();
+      const sectorName = String(sectorNameById[record?.sector] || record?.sector || '').toLowerCase();
+      const recordPhoneDigits = normalizePhoneDigits(record.numero);
       const matchesSearch =
-        record.nombre.toLowerCase().includes(searchLower) ||
-        record.id.toLowerCase().includes(searchLower) ||
-        (record.numero && record.numero.includes(deferredSearchTerm)) ||
-        (record.correo && record.correo.toLowerCase().includes(searchLower)) ||
-        sectorName.toLowerCase().includes(searchLower);
+        recordName.includes(searchLower) ||
+        recordId.includes(searchLower) ||
+        (searchDigits ? recordPhoneDigits.includes(searchDigits) : (record.numero && record.numero.includes(deferredSearchTerm))) ||
+        recordEmail.includes(searchLower) ||
+        sectorName.includes(searchLower);
 
       const matchesPais = filters.pais === 'ALL' || record.pais === filters.pais;
       const matchesCategoria = filters.categoria === 'ALL' || record.categoria === filters.categoria;

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Mail, Phone, Save, User, X } from 'lucide-react';
-import { ESTADOS_PROSPECCION } from '../lib/constants';
 import { detectCountryCodeFromPhone, getCountryMetaForRecord } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
 import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
 import { getSectorLabel } from '../lib/sector-utils';
-import { LANG_LOCALES, translateStatus } from '../lib/i18n';
+import { LANG_LOCALES } from '../lib/i18n';
 import { useSectors } from '../hooks/useSectors';
 
 const countsAsProspecting = (status) => status !== 'Nuevo' && status !== 'Descartado' && status !== 'Liquidado';
@@ -18,7 +17,7 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
 
   useEffect(() => {
     setDraft(record);
-  }, [record]);
+  }, [record?.id]);
 
   const paisData = useMemo(
     () => getCountryMetaForRecord(draft),
@@ -56,15 +55,6 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
     onClose();
   };
 
-  const handleStatusChange = (nextStatus) => {
-    setDraft((prev) => ({
-      ...prev,
-      estadoProspeccion: nextStatus,
-      inProspecting: countsAsProspecting(nextStatus),
-      isArchived: isArchivedStatus(nextStatus),
-    }));
-  };
-
   const handlePhoneChange = (value) => {
     const nextPhone = value.replace(/[^\d+\s-()]/g, '');
     setDraft((prev) => ({
@@ -75,10 +65,34 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
   };
 
   const handleStageChange = (nextStage) => {
+    const normalizedStage = normalizeLeadStage(nextStage, draft);
+    const currentStage = normalizeLeadStage(record.stage, record);
+
+    if (normalizedStage === currentStage) {
+      setDraft((prev) => ({
+        ...prev,
+        stage: normalizedStage,
+      }));
+      return;
+    }
+
+    const stageLabel = getPipelineStageMeta(normalizedStage, { ...record, ...draft, stage: normalizedStage }).label;
+    const nextHistory = [
+      { fecha: getLocalISOTime(), accion: `Pipeline actualizado a: ${stageLabel}` },
+      ...(draft.historial || record.historial || []),
+    ];
+
     setDraft((prev) => ({
       ...prev,
-      stage: normalizeLeadStage(nextStage, prev),
+      stage: normalizedStage,
+      historial: nextHistory,
     }));
+
+    onUpdate({
+      ...record,
+      stage: normalizedStage,
+      historial: nextHistory,
+    });
   };
 
   return (
@@ -217,20 +231,6 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
                         {getSectorLabel(language, draft.sector, sectors)}
                       </option>
                     ) : null}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <span className="font-medium">{t('common_status')}</span>
-                  <select
-                    value={draft.estadoProspeccion || 'Nuevo'}
-                    onChange={(e) => handleStatusChange(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100 sm:w-auto"
-                  >
-                    {ESTADOS_PROSPECCION.filter((status) => status.id !== 'Descartado' && status.id !== 'Liquidado').map((status) => (
-                      <option key={status.id} value={status.id}>
-                        {translateStatus(language, status.id)}
-                      </option>
-                    ))}
                   </select>
                 </div>
               </div>
