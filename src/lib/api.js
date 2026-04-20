@@ -5,6 +5,26 @@ export function setApiSessionToken(token) {
   sessionToken = token || null;
 }
 
+function buildStreamUrl(path) {
+  const url = new URL(`${API_BASE}${path}`, window.location.origin);
+
+  if (sessionToken) {
+    url.searchParams.set('sessionToken', sessionToken);
+  }
+
+  return url.toString();
+}
+
+function buildAuthenticatedUrl(path) {
+  const url = new URL(`${API_BASE}${path}`, window.location.origin);
+
+  if (sessionToken) {
+    url.searchParams.set('sessionToken', sessionToken);
+  }
+
+  return url.toString();
+}
+
 async function apiRequest(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
     headers: {
@@ -135,6 +155,43 @@ export const api = {
     return apiRequest('/wa/disconnect', {
       method: 'POST',
     });
+  },
+
+  listWhatsAppChats() {
+    return apiRequest('/wa/chats');
+  },
+
+  getWhatsAppChatMessages(contactId) {
+    return apiRequest(`/wa/chats/${encodeURIComponent(contactId)}/messages`);
+  },
+
+  sendWhatsAppChatMessage(contactId, payload) {
+    return apiRequest(`/wa/chats/${encodeURIComponent(contactId)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  forwardWhatsAppChatMessage(contactId, messageId, payload) {
+    return apiRequest(`/wa/chats/${encodeURIComponent(contactId)}/messages/${encodeURIComponent(messageId)}/forward`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteWhatsAppChatMessage(contactId, messageId, payload = {}) {
+    return apiRequest(`/wa/chats/${encodeURIComponent(contactId)}/messages/${encodeURIComponent(messageId)}`, {
+      method: 'DELETE',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getWhatsAppChatStreamUrl(contactId) {
+    return buildStreamUrl(`/wa/chats/${encodeURIComponent(contactId)}/stream`);
+  },
+
+  getWhatsAppChatMediaUrl(contactId, messageId) {
+    return buildAuthenticatedUrl(`/wa/chats/${encodeURIComponent(contactId)}/messages/${encodeURIComponent(messageId)}/media`);
   },
 
   adminOverview(params = {}) {

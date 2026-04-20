@@ -7,6 +7,7 @@ import { detectCountryCodeFromPhone } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
 import { normalizeLeadStage } from '../lib/lead-pipeline';
 import { buildLeadIdentity } from '../lib/lead-utils';
+import { getWhatsAppQrCache, setWhatsAppQrCache } from '../lib/whatsapp-cache';
 import { useSectors } from '../hooks/useSectors';
 
 const InputUI = ({ label, ...props }) => (
@@ -27,23 +28,28 @@ const SelectUI = ({ label, options, ...props }) => (
 
 export function AddRecordView({ records, duplicateRecords = [], setRecords, setActiveTab, setDuplicateRecords, t, isViewOnly, currentUser, onCreateRecord, onImportRecords }) {
   const { activeSectors } = useSectors();
+  const workspaceId = currentUser?.workspaceId || '';
+  const cachedWaQr = getWhatsAppQrCache(workspaceId);
   const [inputMode, setInputMode] = useState('whatsapp');
   const [whatsAppMode, setWhatsAppMode] = useState('wa-group');
   const [massiveData, setMassiveData] = useState('');
   const [waData, setWaData] = useState('');
   const [waSector, setWaSector] = useState('TRA');
   const [waNota, setWaNota] = useState('');
-  const [waQrGroups, setWaQrGroups] = useState([]);
-  const [selectedWaQrGroup, setSelectedWaQrGroup] = useState('');
-  const [selectedWaQrGroupMeta, setSelectedWaQrGroupMeta] = useState(null);
+  const [waQrGroups, setWaQrGroups] = useState(() => cachedWaQr.groups || []);
+  const [selectedWaQrGroup, setSelectedWaQrGroup] = useState(() => cachedWaQr.selectedGroup || '');
+  const [selectedWaQrGroupIds, setSelectedWaQrGroupIds] = useState(() => cachedWaQr.selectedGroupIds || []);
+  const [selectedWaQrGroupMeta, setSelectedWaQrGroupMeta] = useState(() => cachedWaQr.selectedGroupMeta || null);
   const [isLoadingWaQrGroups, setIsLoadingWaQrGroups] = useState(false);
   const [isLoadingWaQrParticipants, setIsLoadingWaQrParticipants] = useState(false);
-  const [waQrParticipants, setWaQrParticipants] = useState([]);
-  const [waQrSelection, setWaQrSelection] = useState({});
+  const [waQrParticipantsByGroup, setWaQrParticipantsByGroup] = useState(() => cachedWaQr.participantsByGroup || {});
+  const [waQrSelection, setWaQrSelection] = useState(() => cachedWaQr.selection || {});
   const [skippedCountInfo, setSkippedCountInfo] = useState(null);
   const [showWaHelpVideo, setShowWaHelpVideo] = useState(false);
   const [inlineNotice, setInlineNotice] = useState(null);
+  const [isWaQrGroupDropdownOpen, setIsWaQrGroupDropdownOpen] = useState(false);
   const waGroupStatusPollRef = useRef(null);
+  const waQrGroupDropdownRef = useRef(null);
 
   const [formData, setFormData] = useState({ nombre: '', numero: '', correo: '', pais: 'PE', sector: 'CRI', subsector: '', origen: ORIGENES[0], fechaIngreso: getLocalISODate(), nota: '', sendToProspecting: false });
 
@@ -149,6 +155,40 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     if (!inlineNotice) return;
     setInlineNotice(null);
   }, [formData, inlineNotice, massiveData, waData]);
+
+  useEffect(() => {
+    if (!isWaQrGroupDropdownOpen) return undefined;
+
+    const handleClickOutside = (event) => {
+      if (!waQrGroupDropdownRef.current?.contains(event.target)) {
+        setIsWaQrGroupDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isWaQrGroupDropdownOpen]);
+
+  useEffect(() => {
+    const cachedSnapshot = getWhatsAppQrCache(workspaceId);
+    setWaQrGroups(Array.isArray(cachedSnapshot?.groups) ? cachedSnapshot.groups : []);
+    setSelectedWaQrGroup(String(cachedSnapshot?.selectedGroup || ''));
+    setSelectedWaQrGroupIds(Array.isArray(cachedSnapshot?.selectedGroupIds) ? cachedSnapshot.selectedGroupIds : []);
+    setSelectedWaQrGroupMeta(cachedSnapshot?.selectedGroupMeta || null);
+    setWaQrParticipantsByGroup(cachedSnapshot?.participantsByGroup && typeof cachedSnapshot.participantsByGroup === 'object' ? cachedSnapshot.participantsByGroup : {});
+    setWaQrSelection(cachedSnapshot?.selection && typeof cachedSnapshot.selection === 'object' ? cachedSnapshot.selection : {});
+  }, [workspaceId]);
+
+  useEffect(() => {
+    setWhatsAppQrCache(workspaceId, {
+      groups: waQrGroups,
+      selectedGroup: selectedWaQrGroup,
+      selectedGroupIds: selectedWaQrGroupIds,
+      selectedGroupMeta: selectedWaQrGroupMeta,
+      participantsByGroup: waQrParticipantsByGroup,
+      selection: waQrSelection,
+    });
+  }, [selectedWaQrGroup, selectedWaQrGroupIds, selectedWaQrGroupMeta, waQrGroups, waQrParticipantsByGroup, waQrSelection, workspaceId]);
 
   const handlePhoneChange = (e) => {
     let num = e.target.value.replace(/[^\d+\s-()]/g, '');
@@ -750,20 +790,30 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
       .trim(),
     [],
   );
+  const selectedWaQrGroupsData = useMemo(
+    () => selectedWaQrGroupIds
+      .map((groupId) => {
+        const matchedGroup = waQrGroups.find((group) => group.id === groupId) || null;
+        if (!matchedGroup && selectedWaQrGroupMeta?.id !== groupId) return null;
+        return {
+          ...(matchedGroup || {}),
+          ...(selectedWaQrGroupMeta?.id === groupId ? selectedWaQrGroupMeta : {}),
+        };
+      })
+      .filter(Boolean),
+    [selectedWaQrGroupIds, selectedWaQrGroupMeta, waQrGroups],
+  );
   const selectedWaQrGroupData = useMemo(
-    () => {
-      const matchedGroup = waQrGroups.find((group) => group.id === selectedWaQrGroup) || null;
-      if (!matchedGroup && !selectedWaQrGroupMeta) return null;
-      return {
-        ...(matchedGroup || {}),
-        ...(selectedWaQrGroupMeta || {}),
-      };
-    },
-    [selectedWaQrGroup, selectedWaQrGroupMeta, waQrGroups],
+    () => selectedWaQrGroupsData.find((group) => group.id === selectedWaQrGroup) || selectedWaQrGroupsData[0] || null,
+    [selectedWaQrGroup, selectedWaQrGroupsData],
   );
   const exportedWaQrGroupCount = useMemo(() => {
-    const selectedGroupKey = normalizeWaGroupLabel(selectedWaQrGroupData?.name);
-    if (!selectedGroupKey) return 0;
+    const selectedGroupKeys = new Set(
+      selectedWaQrGroupsData
+        .map((group) => normalizeWaGroupLabel(group?.name))
+        .filter(Boolean),
+    );
+    if (selectedGroupKeys.size === 0) return 0;
 
     const matchesSelectedGroup = (record) => {
       if (String(record?.origen || '') !== 'WhatsApp QR Group') {
@@ -772,34 +822,50 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
       const subsectorKey = normalizeWaGroupLabel(record?.subsector);
       const noteKey = normalizeWaGroupLabel(record?.nota || record?.notes);
-      return subsectorKey === selectedGroupKey || noteKey.includes(selectedGroupKey);
+      return Array.from(selectedGroupKeys).some((groupKey) => subsectorKey === groupKey || noteKey.includes(groupKey));
     };
 
     return [...records, ...duplicateRecords].filter(matchesSelectedGroup).length;
-  }, [duplicateRecords, normalizeWaGroupLabel, records, selectedWaQrGroupData?.name]);
+  }, [duplicateRecords, normalizeWaGroupLabel, records, selectedWaQrGroupsData]);
   const hasExportedWaQrGroup = exportedWaQrGroupCount > 0;
+  const allWaQrGroupsSelected = waQrGroups.length > 0 && selectedWaQrGroupIds.length === waQrGroups.length;
+  const waQrSelectedGroupLabel = useMemo(() => {
+    if (selectedWaQrGroupsData.length === 0) return 'Selecciona uno o varios grupos';
+    if (selectedWaQrGroupsData.length === waQrGroups.length && waQrGroups.length > 1) return 'Todos los grupos';
+    if (selectedWaQrGroupsData.length === 1) return selectedWaQrGroupsData[0].name;
+    return `${selectedWaQrGroupsData.length} grupos seleccionados`;
+  }, [selectedWaQrGroupsData, waQrGroups.length]);
   const waQrPreviewContacts = useMemo(
-    () => waQrParticipants.map((participant, index) => {
-      const jid = participant.jid || `participant-${index}`;
-      const isAdmin = Boolean(participant.isAdmin);
-      const adminRole = String(participant.adminRole || '').toLowerCase();
-      const selected = waQrSelection[jid] ?? !isAdmin;
-      const roleLabel = adminRole === 'superadmin'
-        ? 'Super Admin'
-        : adminRole === 'admin'
-          ? 'Admin'
-          : 'Miembro';
+    () => selectedWaQrGroupIds.flatMap((groupId) => {
+      const groupMeta = selectedWaQrGroupsData.find((group) => group.id === groupId);
+      const participants = waQrParticipantsByGroup[groupId] || [];
 
-      return {
-        jid,
-        rol: roleLabel,
-        adminRole,
-        telefono: participant.phoneNumber || '',
-        isAdmin,
-        selected,
-      };
+      return participants.map((participant, index) => {
+        const jid = participant.jid || `participant-${index}`;
+        const isAdmin = Boolean(participant.isAdmin);
+        const adminRole = String(participant.adminRole || '').toLowerCase();
+        const selectionKey = `${groupId}::${jid}`;
+        const selected = waQrSelection[selectionKey] ?? !isAdmin;
+        const roleLabel = adminRole === 'superadmin'
+          ? 'Super Admin'
+          : adminRole === 'admin'
+            ? 'Admin'
+            : 'Miembro';
+
+        return {
+          jid,
+          groupId,
+          groupName: groupMeta?.name || participant.groupName || 'Grupo',
+          selectionKey,
+          rol: roleLabel,
+          adminRole,
+          telefono: participant.phoneNumber || '',
+          isAdmin,
+          selected,
+        };
+      });
     }),
-    [waQrParticipants, waQrSelection],
+    [selectedWaQrGroupIds, selectedWaQrGroupsData, waQrParticipantsByGroup, waQrSelection],
   );
   const selectedWaQrPreviewContacts = useMemo(
     () => waQrPreviewContacts.filter((contact) => contact.selected),
@@ -811,8 +877,20 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     [waQrPreviewContacts],
   );
 
-  const handleLoadWaQrGroups = useCallback(async () => {
-    setIsLoadingWaQrGroups(true);
+  useEffect(() => {
+    if (!selectedWaQrGroup) {
+      setSelectedWaQrGroupMeta(null);
+      return;
+    }
+
+    const activeGroupMeta = waQrGroups.find((group) => group.id === selectedWaQrGroup) || null;
+    setSelectedWaQrGroupMeta(activeGroupMeta);
+  }, [selectedWaQrGroup, waQrGroups]);
+
+  const handleLoadWaQrGroups = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) {
+      setIsLoadingWaQrGroups(true);
+    }
     setInlineNotice(null);
 
     try {
@@ -827,9 +905,23 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
       setWaQrGroups(groups);
       setSelectedWaQrGroupMeta(groups[0] || null);
-      setWaQrParticipants([]);
-      setWaQrSelection({});
-      setSelectedWaQrGroup((current) => current || groups[0]?.id || '');
+      setWaQrParticipantsByGroup((current) => Object.fromEntries(
+        Object.entries(current).filter(([groupId]) => groups.some((group) => group.id === groupId)),
+      ));
+      setWaQrSelection((current) => Object.fromEntries(
+        Object.entries(current).filter(([selectionKey]) => groups.some((group) => selectionKey.startsWith(`${group.id}::`))),
+      ));
+      setSelectedWaQrGroup((current) => {
+        const nextActiveId = current && groups.some((group) => group.id === current)
+          ? current
+          : groups[0]?.id || '';
+        return nextActiveId;
+      });
+      setSelectedWaQrGroupIds((current) => {
+        const validSelection = current.filter((groupId) => groups.some((group) => group.id === groupId));
+        if (validSelection.length > 0) return validSelection;
+        return groups[0]?.id ? [groups[0].id] : [];
+      });
 
       if (groups.length === 0) {
         setInlineNotice({
@@ -843,7 +935,9 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         message: error?.message || 'No se pudieron cargar tus grupos de WhatsApp.',
       });
     } finally {
-      setIsLoadingWaQrGroups(false);
+      if (!silent) {
+        setIsLoadingWaQrGroups(false);
+      }
     }
   }, []);
 
@@ -860,7 +954,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     let cancelled = false;
 
     const syncWaGroups = async () => {
-      if (isLoadingWaQrGroups || waQrGroups.length > 0) {
+      if (isLoadingWaQrGroups) {
         return;
       }
 
@@ -870,7 +964,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
 
         const status = String(response?.connection?.status || '').toLowerCase();
         if (status === 'open') {
-          await handleLoadWaQrGroups();
+          await handleLoadWaQrGroups({ silent: waQrGroups.length > 0 });
           if (!cancelled && waGroupStatusPollRef.current) {
             window.clearInterval(waGroupStatusPollRef.current);
             waGroupStatusPollRef.current = null;
@@ -896,70 +990,93 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
   }, [handleLoadWaQrGroups, inputMode, isLoadingWaQrGroups, waQrGroups.length, whatsAppMode]);
 
   useEffect(() => {
-    if (inputMode !== 'whatsapp' || whatsAppMode !== 'wa-group' || !selectedWaQrGroup) {
-      if (inputMode !== 'whatsapp' || whatsAppMode !== 'wa-group') {
-        setWaQrParticipants([]);
-      }
-      if (!selectedWaQrGroup) {
-        setSelectedWaQrGroupMeta(null);
-      }
+    if (inputMode !== 'whatsapp' || whatsAppMode !== 'wa-group') return undefined;
+
+    if (selectedWaQrGroupIds.length === 0) {
+      setSelectedWaQrGroupMeta(null);
       return;
     }
 
+    if (!selectedWaQrGroupIds.includes(selectedWaQrGroup)) {
+      setSelectedWaQrGroup(selectedWaQrGroupIds[0] || '');
+    }
+
     let cancelled = false;
+    const missingGroupIds = selectedWaQrGroupIds.filter((groupId) => !waQrParticipantsByGroup[groupId]);
+
+    if (missingGroupIds.length === 0) {
+      const activeGroupMeta = waQrGroups.find((group) => group.id === selectedWaQrGroupIds[0]) || null;
+      setSelectedWaQrGroupMeta(activeGroupMeta);
+      return undefined;
+    }
 
     const loadParticipants = async () => {
       setIsLoadingWaQrParticipants(true);
       try {
-        const response = await api.listWhatsAppGroupParticipants(selectedWaQrGroup);
-        if (cancelled) return;
-
-        const participants = Array.isArray(response.items)
-          ? response.items.map((participant, index) => ({
-              jid: participant.jid || '',
-              phoneNumber: participant.phoneNumber || '',
-              name: participant.name || '',
-              isAdmin: Boolean(participant.isAdmin),
-              adminRole: participant.adminRole || null,
-              fallbackName: `Participante ${index + 1}`,
-            }))
-          : [];
-
-        if (response.group?.id) {
-          setSelectedWaQrGroupMeta({
-            id: response.group.id,
-            name: response.group.name || '',
-            avatarUrl: response.group.avatarUrl || '',
-          });
-          setWaQrGroups((current) =>
-            current.map((group) =>
-              group.id === response.group.id
-                ? {
-                    ...group,
-                    name: response.group.name || group.name,
-                    avatarUrl: response.group.avatarUrl || group.avatarUrl || '',
-                  }
-                : group,
-            ),
-          );
-        }
-
-        setWaQrParticipants(participants);
-        setWaQrSelection(
-          participants.reduce((accumulator, participant, index) => {
-            const key = participant.jid || `participant-${index}`;
-            accumulator[key] = !participant.isAdmin;
-            return accumulator;
-          }, {}),
+        const responses = await Promise.allSettled(
+          missingGroupIds.map((groupId) => api.listWhatsAppGroupParticipants(groupId)),
         );
-      } catch (error) {
         if (cancelled) return;
-        setWaQrParticipants([]);
-        setWaQrSelection({});
-        setInlineNotice({
-          tone: 'warning',
-          message: error?.message || 'No se pudieron cargar los participantes del grupo seleccionado.',
+
+        const participantsUpdates = {};
+        const selectionUpdates = {};
+        let firstError = null;
+
+        responses.forEach((result, index) => {
+          const groupId = missingGroupIds[index];
+          if (result.status !== 'fulfilled') {
+            if (!firstError) {
+              firstError = result.reason?.message || 'No se pudieron cargar algunos grupos seleccionados.';
+            }
+            return;
+          }
+
+          const response = result.value;
+          const participants = Array.isArray(response.items)
+            ? response.items.map((participant, participantIndex) => ({
+                jid: participant.jid || '',
+                phoneNumber: participant.phoneNumber || '',
+                name: participant.name || '',
+                isAdmin: Boolean(participant.isAdmin),
+                adminRole: participant.adminRole || null,
+                fallbackName: `Participante ${participantIndex + 1}`,
+              }))
+            : [];
+
+          participantsUpdates[groupId] = participants;
+
+          participants.forEach((participant, participantIndex) => {
+            const key = `${groupId}::${participant.jid || `participant-${participantIndex}`}`;
+            selectionUpdates[key] = !participant.isAdmin;
+          });
+
+          if (response.group?.id) {
+            setWaQrGroups((current) =>
+              current.map((group) =>
+                group.id === response.group.id
+                  ? {
+                      ...group,
+                      name: response.group.name || group.name,
+                      avatarUrl: response.group.avatarUrl || group.avatarUrl || '',
+                    }
+                  : group,
+              ),
+            );
+          }
         });
+
+        setWaQrParticipantsByGroup((current) => ({ ...current, ...participantsUpdates }));
+        setWaQrSelection((current) => ({ ...selectionUpdates, ...current }));
+
+        const activeGroupMeta = waQrGroups.find((group) => group.id === (selectedWaQrGroup || selectedWaQrGroupIds[0])) || null;
+        setSelectedWaQrGroupMeta(activeGroupMeta);
+
+        if (firstError) {
+          setInlineNotice({
+            tone: 'warning',
+            message: firstError,
+          });
+        }
       } finally {
         if (!cancelled) {
           setIsLoadingWaQrParticipants(false);
@@ -972,21 +1089,55 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     return () => {
       cancelled = true;
     };
-  }, [inputMode, selectedWaQrGroup, whatsAppMode]);
+  }, [inputMode, selectedWaQrGroup, selectedWaQrGroupIds, waQrGroups, waQrParticipantsByGroup, whatsAppMode]);
 
-  const toggleWaQrContactSelection = useCallback((jid) => {
+  const toggleWaQrContactSelection = useCallback((selectionKey) => {
     setWaQrSelection((current) => ({
       ...current,
-      [jid]: !(current[jid] ?? true),
+      [selectionKey]: !(current[selectionKey] ?? true),
     }));
   }, []);
+
+  const toggleWaQrGroupSelection = useCallback((groupId) => {
+    setSelectedWaQrGroupIds((current) => {
+      const alreadySelected = current.includes(groupId);
+      const nextSelection = alreadySelected
+        ? current.filter((id) => id !== groupId)
+        : [...current, groupId];
+
+      if (nextSelection.length === 0) {
+        setSelectedWaQrGroup('');
+        setSelectedWaQrGroupMeta(null);
+      } else if (!alreadySelected || !nextSelection.includes(selectedWaQrGroup)) {
+        setSelectedWaQrGroup(alreadySelected ? nextSelection[0] || '' : groupId);
+      }
+
+      return nextSelection;
+    });
+  }, [selectedWaQrGroup]);
+
+  const handleSelectAllWaQrGroups = useCallback(() => {
+    if (waQrGroups.length === 0) return;
+
+    setSelectedWaQrGroupIds((current) => {
+      if (current.length === waQrGroups.length) {
+        setSelectedWaQrGroup('');
+        setSelectedWaQrGroupMeta(null);
+        return [];
+      }
+
+      const allGroupIds = waQrGroups.map((group) => group.id);
+      setSelectedWaQrGroup(allGroupIds[0] || '');
+      return allGroupIds;
+    });
+  }, [waQrGroups]);
 
   const handleExportWaQrCsv = useCallback(() => {
     if (selectedWaQrPreviewContacts.length === 0) return;
 
     const csvRows = [
-      ['Rol', 'Telefono'],
-      ...selectedWaQrPreviewContacts.map((contact) => [contact.rol, contact.telefono]),
+      ['Grupo', 'Rol', 'Telefono'],
+      ...selectedWaQrPreviewContacts.map((contact) => [contact.groupName, contact.rol, contact.telefono]),
     ];
 
     const csvContent = csvRows
@@ -997,12 +1148,17 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     const downloadUrl = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = downloadUrl;
-    link.setAttribute('download', `${selectedWaQrGroupData?.name || 'grupo-whatsapp'}.csv`);
+    link.setAttribute(
+      'download',
+      selectedWaQrGroupsData.length === 1
+        ? `${selectedWaQrGroupData?.name || 'grupo-whatsapp'}.csv`
+        : 'grupos-whatsapp.csv',
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(downloadUrl);
-  }, [selectedWaQrGroupData?.name, selectedWaQrPreviewContacts]);
+  }, [selectedWaQrGroupData?.name, selectedWaQrGroupsData.length, selectedWaQrPreviewContacts]);
 
   const handleImportWaQrGroup = useCallback(async () => {
     if (selectedWaQrPreviewContacts.length === 0) return;
@@ -1029,11 +1185,11 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         numero: formatted.startsWith('+') ? formatted : `+${digits}`,
         correo: '',
         sector: 'TRA',
-        subsector: selectedWaQrGroupData?.name || 'Lead de Grupo',
+        subsector: contact.groupName || 'Lead de Grupo',
         origen: 'WhatsApp QR Group',
         fechaIngreso: getLocalISODate(dateObj),
-        nota: selectedWaQrGroupData?.name
-          ? `Extraído desde grupo conectado: ${selectedWaQrGroupData.name}`
+        nota: contact.groupName
+          ? `Extraído desde grupo conectado: ${contact.groupName}`
           : 'Extraído desde grupo conectado de WhatsApp.',
         id,
         categoria: 'C',
@@ -1097,7 +1253,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
       setSkippedCountInfo(null);
       if (importSummary.importedCount > 0) setActiveTab('database');
     }, 3000);
-  }, [currentUser.id, currentUser.workspaceId, duplicateRecords.length, onImportRecords, records.length, selectedWaQrGroupData?.name, selectedWaQrPreviewContacts, setActiveTab, setDuplicateRecords, setRecords, t]);
+  }, [currentUser.id, currentUser.workspaceId, duplicateRecords.length, onImportRecords, records.length, selectedWaQrPreviewContacts, setActiveTab, setDuplicateRecords, setRecords, t]);
 
   const handleWaSubmit = async (e) => {
     e.preventDefault();
@@ -1287,60 +1443,94 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                       <div className="pointer-events-none absolute -bottom-10 left-4 h-28 w-28 rounded-full bg-[#25D366]/20 blur-3xl" />
                       <div className="pointer-events-none absolute -bottom-8 right-8 h-24 w-24 rounded-full bg-[#00C853]/16 blur-3xl" />
                       <label className="relative mb-2 block pl-2 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-500">
-                        Seleccionar grupo
+                        Seleccionar grupos
                       </label>
-                      <div className="group relative">
+                      <div ref={waQrGroupDropdownRef} className="group relative">
                         <div className="pointer-events-none absolute inset-0 rounded-[1.85rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(240,253,244,0.78))] shadow-[0_20px_40px_-24px_rgba(21,128,61,0.45)] transition-all duration-300 group-hover:shadow-[0_24px_48px_-26px_rgba(21,128,61,0.52)]" />
-                        <select
-                          value={selectedWaQrGroup}
-                          onChange={(event) => {
-                            const nextGroupId = event.target.value;
-                            setSelectedWaQrGroup(nextGroupId);
-                            setSelectedWaQrGroupMeta(
-                              waQrGroups.find((group) => group.id === nextGroupId) || null,
-                            );
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (waQrGroups.length === 0 || isLoadingWaQrGroups) return;
+                            setIsWaQrGroupDropdownOpen((current) => !current);
                           }}
                           disabled={waQrGroups.length === 0 || isLoadingWaQrGroups}
-                          className="relative w-full cursor-pointer appearance-none rounded-[1.85rem] border border-emerald-200/80 bg-white/80 px-5 py-4 pr-16 text-[15px] font-semibold leading-tight text-slate-700 outline-none backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-white/92 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100/80 disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-slate-400"
+                          className="relative flex w-full items-center justify-between gap-4 rounded-[1.85rem] border border-emerald-200/80 bg-white/80 px-5 py-4 text-left text-[15px] font-semibold leading-tight text-slate-700 outline-none backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-white/92 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100/80 disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-slate-400"
                         >
-                          <option value="">
+                          <span className="min-w-0 truncate">
                             {isLoadingWaQrGroups
                               ? 'Cargando grupos...'
                               : waQrGroups.length === 0
                                 ? 'Esperando conexion de WhatsApp...'
-                                : 'Selecciona un grupo'}
-                          </option>
-                          {waQrGroups.map((group) => (
-                            <option key={group.id} value={group.id}>
-                              {group.name}
-                            </option>
-                          ))}
-                        </select>
-                        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-emerald-700">
-                          <ChevronDown className="h-5 w-5" />
-                        </div>
+                                : waQrSelectedGroupLabel}
+                          </span>
+                          <span className="inline-flex items-center gap-2 shrink-0">
+                            {selectedWaQrGroupIds.length > 0 ? (
+                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                                {selectedWaQrGroupIds.length}
+                              </span>
+                            ) : null}
+                            <ChevronDown className={`h-5 w-5 text-emerald-700 transition-transform ${isWaQrGroupDropdownOpen ? 'rotate-180' : ''}`} />
+                          </span>
+                        </button>
+
+                        {isWaQrGroupDropdownOpen ? (
+                          <div className="absolute left-0 right-0 top-[calc(100%+0.65rem)] z-30 overflow-hidden rounded-[1.4rem] border border-emerald-100 bg-white/95 p-2 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur-xl">
+                            <button
+                              type="button"
+                              onClick={handleSelectAllWaQrGroups}
+                              className="flex w-full items-center justify-between rounded-2xl px-3.5 py-3 text-left text-sm font-bold text-slate-700 transition-colors hover:bg-emerald-50"
+                            >
+                              <span className="flex items-center gap-3">
+                                <span className={`flex h-5 w-5 items-center justify-center rounded border text-[11px] ${allWaQrGroupsSelected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
+                                  ✓
+                                </span>
+                                Seleccionar todos
+                              </span>
+                              <span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
+                                {waQrGroups.length} grupos
+                              </span>
+                            </button>
+
+                            <div className="my-1 h-px bg-slate-100" />
+
+                            <div className="max-h-64 overflow-y-auto">
+                              {waQrGroups.map((group) => {
+                                const isSelected = selectedWaQrGroupIds.includes(group.id);
+                                const isActivePreview = selectedWaQrGroup === group.id;
+
+                                return (
+                                  <button
+                                    key={group.id}
+                                    type="button"
+                                    onClick={() => toggleWaQrGroupSelection(group.id)}
+                                    className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-left transition-colors ${isSelected ? 'bg-emerald-50/80' : 'hover:bg-slate-50'}`}
+                                  >
+                                    <span className="flex min-w-0 items-center gap-3">
+                                      <span className={`flex h-5 w-5 items-center justify-center rounded border text-[11px] ${isSelected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
+                                        ✓
+                                      </span>
+                                      <span className="truncate text-sm font-semibold text-slate-700">{group.name}</span>
+                                    </span>
+                                    {isActivePreview ? (
+                                      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                                        Vista
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="relative mt-3 rounded-2xl border border-white/80 bg-white/65 px-4 py-3 pr-24 text-[15px] leading-6 text-slate-500 shadow-inner shadow-white/40">
-                        {selectedWaQrGroupData
-                          ? `${waQrPreviewContacts.length} contactos listos para revisar en ${selectedWaQrGroupData.name}.`
-                          : 'Todavía no has seleccionado un grupo para extraer contactos.'}
+                      <div className="relative mt-3 rounded-2xl border border-white/80 bg-white/65 px-4 py-3 text-[15px] leading-6 text-slate-500 shadow-inner shadow-white/40">
+                        {selectedWaQrGroupsData.length > 0
+                          ? `${waQrPreviewContacts.length} contactos listos para revisar en ${selectedWaQrGroupsData.length === 1 ? selectedWaQrGroupData?.name : `${selectedWaQrGroupsData.length} grupos seleccionados`}.`
+                          : 'Todavía no has seleccionado grupos para extraer contactos.'}
                       </div>
-                      <div className="absolute bottom-6 left-4 z-10 max-w-[13.5rem] rounded-[1.35rem] border border-white/80 bg-white/72 px-4 py-3 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] backdrop-blur-xl">
-                        <div className={`inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] ${hasExportedWaQrGroup ? 'text-emerald-700' : 'text-sky-700'}`}>
-                          <span className={`h-2.5 w-2.5 rounded-full ${hasExportedWaQrGroup ? 'bg-emerald-500' : 'bg-sky-500'}`} />
-                          {hasExportedWaQrGroup ? 'Ya exportado' : 'Listo para exportar'}
-                        </div>
-                        <p className="mt-1.5 text-[13px] leading-5 text-slate-500">
-                          {selectedWaQrGroupData
-                            ? hasExportedWaQrGroup
-                              ? `${exportedWaQrGroupCount} registros de este grupo ya están en base.`
-                              : 'Aún no detectamos exportaciones previas de este grupo.'
-                            : 'Selecciona un grupo para revisar su estado antes de exportar.'}
-                        </p>
-                      </div>
-                      <div className="pointer-events-none absolute bottom-5 right-5 z-10">
+                      <div className="pointer-events-none mt-5 flex justify-center">
                         <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-white/85 bg-gradient-to-br from-[#25D366] via-[#14b856] to-[#00C853] shadow-[0_14px_30px_rgba(37,211,102,0.28)]">
-                          {selectedWaQrGroupData?.avatarUrl ? (
+                          {selectedWaQrGroupsData.length === 1 && selectedWaQrGroupData?.avatarUrl ? (
                             <img
                               src={selectedWaQrGroupData.avatarUrl}
                               alt={selectedWaQrGroupData.name || 'Grupo de WhatsApp'}
@@ -1351,21 +1541,35 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                           )}
                         </div>
                       </div>
+                      <div className="mt-5 max-w-[15rem] rounded-[1.35rem] border border-white/80 bg-white/72 px-4 py-3 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] backdrop-blur-xl">
+                        <div className={`inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] ${hasExportedWaQrGroup ? 'text-emerald-700' : 'text-sky-700'}`}>
+                          <span className={`h-2.5 w-2.5 rounded-full ${hasExportedWaQrGroup ? 'bg-emerald-500' : 'bg-sky-500'}`} />
+                          {hasExportedWaQrGroup ? 'Ya exportado' : 'Listo para exportar'}
+                        </div>
+                        <p className="mt-1.5 text-[13px] leading-5 text-slate-500">
+                          {selectedWaQrGroupsData.length > 0
+                            ? hasExportedWaQrGroup
+                              ? `${exportedWaQrGroupCount} registros de los grupos seleccionados ya están en base.`
+                              : 'Aún no detectamos exportaciones previas de los grupos seleccionados.'
+                            : 'Selecciona grupos para revisar su estado antes de exportar.'}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex min-w-0 flex-col gap-3">
                       <div className="overflow-hidden rounded-[1.5rem] border border-slate-200/70 bg-white/80 shadow-inner shadow-slate-100">
                         <div className="flex items-center justify-between gap-3 border-b border-slate-200/70 px-4 py-2">
                           <div className="text-xs font-bold uppercase tracking-[0.22em] text-slate-400">
-                            {selectedWaQrCount} seleccionados · {waQrAdminCount} admins
+                            {selectedWaQrCount} seleccionados · {waQrAdminCount} admins · {selectedWaQrGroupsData.length} grupos
                           </div>
                           <div className="text-xs text-slate-400">
                             Los admins se excluyen por defecto.
                           </div>
                         </div>
-                        <div className="grid grid-cols-[42px_1.1fr_1fr] gap-3 border-b border-slate-200/70 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
+                        <div className="grid grid-cols-[42px_0.8fr_1.1fr_1fr] gap-3 border-b border-slate-200/70 px-4 py-2.5 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
                           <span>Sel</span>
                           <span>Rol</span>
+                          <span>Grupo</span>
                           <span>Teléfono</span>
                         </div>
                         <div className="max-h-[15.5rem] overflow-y-auto">
@@ -1377,7 +1581,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                             waQrPreviewContacts.map((contact, index) => (
                               <div
                                 key={`${contact.telefono || contact.jid}-${index}`}
-                                className={`grid grid-cols-[42px_1.1fr_1fr] items-center gap-3 border-b px-4 py-2.5 text-sm last:border-b-0 ${
+                                className={`grid grid-cols-[42px_0.8fr_1.1fr_1fr] items-center gap-3 border-b px-4 py-2.5 text-sm last:border-b-0 ${
                                   contact.isAdmin
                                     ? 'border-red-100 bg-red-50/80'
                                     : 'border-slate-100'
@@ -1387,7 +1591,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                                   <input
                                     type="checkbox"
                                     checked={contact.selected}
-                                    onChange={() => toggleWaQrContactSelection(contact.jid)}
+                                    onChange={() => toggleWaQrContactSelection(contact.selectionKey)}
                                     className={`h-4 w-4 rounded border-slate-300 text-[#FF5A1F] focus:ring-[#FF5A1F] ${
                                       contact.isAdmin ? 'border-red-300' : ''
                                     }`}
@@ -1407,12 +1611,15 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                                     </span>
                                   ) : null}
                                 </div>
+                                <span className={`${contact.isAdmin ? 'text-red-500' : 'text-slate-500'} truncate`}>
+                                  {contact.groupName}
+                                </span>
                                 <span className={`${contact.isAdmin ? 'text-red-500' : 'text-slate-500'}`}>{contact.telefono}</span>
                               </div>
                             ))
                           ) : (
                             <div className="flex min-h-32 items-center justify-center px-6 py-6 text-center text-sm text-slate-400">
-                              Los contactos extraídos aparecerán aquí cuando elijas un grupo conectado.
+                              Los contactos extraídos aparecerán aquí cuando elijas uno o varios grupos conectados.
                             </div>
                           )}
                         </div>

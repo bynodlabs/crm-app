@@ -411,5 +411,149 @@ export async function handleRequest(req, res) {
     return;
   }
 
+  if (pathname === '/api/wa/chats' && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await whatsappService.listChats(authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  const waChatMessagesMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/messages$/);
+  if (waChatMessagesMatch && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const result = await whatsappService.getChatMessages(
+      authUser.workspaceId,
+      decodeURIComponent(waChatMessagesMatch[1]),
+    );
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  if (waChatMessagesMatch && req.method === 'POST') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const body = await readJsonBody(req);
+    const result = await whatsappService.sendChatMessage(
+      authUser.workspaceId,
+      decodeURIComponent(waChatMessagesMatch[1]),
+      body,
+    );
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  const waChatForwardMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/messages\/([^/]+)\/forward$/);
+  if (waChatForwardMatch && req.method === 'POST') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const body = await readJsonBody(req);
+    const result = await whatsappService.forwardChatMessage(
+      authUser.workspaceId,
+      decodeURIComponent(waChatForwardMatch[1]),
+      decodeURIComponent(waChatForwardMatch[2]),
+      body,
+    );
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  const waChatDeleteMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/messages\/([^/]+)$/);
+  if (waChatDeleteMatch && req.method === 'DELETE') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const body = await readJsonBody(req);
+    const result = await whatsappService.deleteChatMessage(
+      authUser.workspaceId,
+      decodeURIComponent(waChatDeleteMatch[1]),
+      decodeURIComponent(waChatDeleteMatch[2]),
+      body,
+    );
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
+  const waChatMediaMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/messages\/([^/]+)\/media$/);
+  if (waChatMediaMatch && req.method === 'GET') {
+    const sessionToken = String(url.query?.sessionToken || getSessionToken(req) || '');
+    const authResult = await authService.getSessionUser(sessionToken);
+    if (authResult.status !== 200) {
+      sendJson(res, authResult.status, authResult.payload);
+      return;
+    }
+
+    const result = await whatsappService.getChatMedia(
+      authResult.payload.user.workspaceId,
+      decodeURIComponent(waChatMediaMatch[1]),
+      decodeURIComponent(waChatMediaMatch[2]),
+    );
+
+    if (result.status !== 200) {
+      sendJson(res, result.status, result.payload);
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': result.payload.mimeType || 'application/octet-stream',
+      'Content-Length': result.payload.buffer.length,
+      'Content-Disposition': `${result.payload.disposition || 'inline'}; filename="${encodeURIComponent(result.payload.fileName || 'archivo')}"`,
+      'Cache-Control': 'private, max-age=120',
+    });
+    res.end(result.payload.buffer);
+    return;
+  }
+
+  const waChatStreamMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/stream$/);
+  if (waChatStreamMatch && req.method === 'GET') {
+    const sessionToken = String(url.query?.sessionToken || getSessionToken(req) || '');
+    const authResult = await authService.getSessionUser(sessionToken);
+    if (authResult.status !== 200) {
+      sendJson(res, authResult.status, authResult.payload);
+      return;
+    }
+
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const subscriber = res;
+    const result = await whatsappService.subscribeToChat(
+      authResult.payload.user.workspaceId,
+      decodeURIComponent(waChatStreamMatch[1]),
+      subscriber,
+    );
+
+    if (result.status !== 200) {
+      res.write(`event: error\ndata: ${JSON.stringify(result.payload)}\n\n`);
+      res.end();
+      return;
+    }
+    res.write(`event: ready\ndata: ${JSON.stringify(result.payload)}\n\n`);
+
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        clearInterval(heartbeat);
+        result.unsubscribe?.();
+      }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      result.unsubscribe?.();
+      try {
+        res.end();
+      } catch {
+        // ignore teardown errors
+      }
+    });
+    return;
+  }
+
   sendJson(res, 404, { error: 'Route not found', path: pathname });
 }

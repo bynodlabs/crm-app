@@ -83,6 +83,7 @@ import { LoginView } from './views/LoginView';
 import { NetworkView } from './views/NetworkView';
 import { ProspectingWorkspace } from './views/ProspectingWorkspace';
 import { ReportsView } from './views/ReportsView';
+import { ToolsView } from './views/ToolsView';
 
 const FAVICON_VARIANTS = {
   light: '/favicon-light.svg',
@@ -1046,7 +1047,7 @@ export default function App() {
     { id: 'prospecting', label: t('nav_sales'), icon: <Target size={18} />, isActive: activeTab === 'prospecting', onClick: () => setActiveTab('prospecting') },
     { id: 'database', label: t('nav_dir'), icon: <Users size={18} />, isActive: activeTab === 'database', onClick: () => { setActiveTab('database'); setDbSearchTerm(''); } },
     { id: 'add', label: t('nav_add'), icon: <PlusCircle size={18} />, isActive: activeTab === 'add', onClick: () => setActiveTab('add') },
-    { id: 'network', label: t('nav_team'), icon: <Users size={18} />, isActive: activeTab === 'network', onClick: () => setActiveTab('network') },
+    { id: 'tools', label: 'Herramientas', icon: <Grid size={18} />, isActive: activeTab === 'tools' || activeTab === 'network', onClick: () => setActiveTab('tools') },
   ];
 
   const handleMobileNavClick = (handler) => {
@@ -1163,7 +1164,7 @@ export default function App() {
           <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<WhatsAppIcon className="h-[25px] w-[25px] shrink-0" />} label="WhatsApp API" active={activeTab === 'whatsapp-api'} onClick={() => setActiveTab('whatsapp-api')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <div className={`my-2 border-t border-slate-100 ${isSidebarCollapsed ? 'mx-4' : 'mx-6'}`}></div>
-          <NavItem icon={<Users size={20} />} label={t('nav_team')} active={activeTab === 'network'} onClick={() => setActiveTab('network')} theme="purple" isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Grid size={20} />} label="Herramientas" active={activeTab === 'tools' || activeTab === 'network'} onClick={() => setActiveTab('tools')} theme="purple" isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
         </nav>
 
         <div className={`mt-auto transition-all duration-300 ${isSidebarCollapsed ? 'px-3' : 'px-6'}`}>
@@ -1260,10 +1261,10 @@ export default function App() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleMobileNavClick(() => setActiveTab('network'))}
-                  className={`rounded-2xl px-4 py-3 text-left text-sm font-bold transition-all ${activeTab === 'network' ? (isDarkMode ? 'bg-orange-500/15 text-[#FF8A57]' : 'bg-orange-50 text-[#FF5A1F]') : (isDarkMode ? 'bg-[#151515] text-slate-300 hover:bg-[#1a1a1a] hover:text-[#FF5A1F]' : 'bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-[#FF5A1F]')}`}
+                  onClick={() => handleMobileNavClick(() => setActiveTab('tools'))}
+                  className={`rounded-2xl px-4 py-3 text-left text-sm font-bold transition-all ${(activeTab === 'tools' || activeTab === 'network') ? (isDarkMode ? 'bg-orange-500/15 text-[#FF8A57]' : 'bg-orange-50 text-[#FF5A1F]') : (isDarkMode ? 'bg-[#151515] text-slate-300 hover:bg-[#1a1a1a] hover:text-[#FF5A1F]' : 'bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-[#FF5A1F]')}`}
                 >
-                  {t('nav_team')}
+                  Herramientas
                 </button>
                 {currentUser?.rol === 'admin' && (
                   <button
@@ -1318,11 +1319,12 @@ export default function App() {
         )}
         <div className="min-h-0 flex-1 pb-24 lg:pb-0">
         {activeTab === 'home' && <DashboardView records={dashboardDisplayedRecords} allRecords={records} duplicateRecords={duplicateRecords} onSelectRecord={setSelectedRecord} dashboardSectorFilter={dashboardSectorFilter} setDashboardSectorFilter={setDashboardSectorFilter} setActiveTab={setActiveTab} myAgents={myAgents} t={t} currentUser={currentUser} language={language} isDarkMode={isDarkMode} />}
-        {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
+        {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} onCreateRecord={handleCreateRecord} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
         {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
         {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
         {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} />}
         {activeTab === 'reports' && <ReportsView records={records} duplicateRecords={duplicateRecords} currentUser={currentUser} myAgents={myAgents} usersDb={usersDb} sharedLinks={sharedLinks} t={t} language={language} isDarkMode={isDarkMode} />}
+        {activeTab === 'tools' && <ToolsView isDarkMode={isDarkMode} onOpenShareLeads={() => setActiveTab('network')} />}
         {activeTab === 'network' && <NetworkView currentUser={currentUser} usersDb={usersDb} sharedLinks={sharedLinks} records={records} onLinkCreated={handleCreateSharedLink} myAgents={myAgents} t={t} isDarkMode={isDarkMode} />}
         </div>
       </main>

@@ -7,7 +7,7 @@ export const config = {
   apiHost: process.env.HOST || process.env.API_HOST || '0.0.0.0',
   apiPort: toPositiveInt(process.env.PORT || process.env.API_PORT, 3001),
   sessionTtlMs: toPositiveInt(process.env.SESSION_TTL_MS, 1000 * 60 * 60 * 24 * 7),
-  bodyLimitBytes: toPositiveInt(process.env.API_BODY_LIMIT_BYTES, 1024 * 1024),
+  bodyLimitBytes: toPositiveInt(process.env.API_BODY_LIMIT_BYTES, 25 * 1024 * 1024),
   authRateLimit: toPositiveInt(process.env.AUTH_RATE_LIMIT, 10),
   authRateWindowMs: toPositiveInt(process.env.AUTH_RATE_WINDOW_MS, 1000 * 60 * 15),
   corsOrigin: process.env.CORS_ORIGIN || '',

@@ -18,6 +18,7 @@ dist-ssr
 Thumbs.db
 *.tmp
 *.temp
+server/.wa-sessions/
 
 # Editor directories and files
 .vscode/*
