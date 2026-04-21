@@ -1,6 +1,14 @@
 import mysql from 'mysql2/promise';
 import { config } from './config.js';
 import {
+  getLegacyStageIdFromPipelineStage,
+  getLegacyStatusFromPipelineStage,
+  isColdPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from './lead-pipeline.js';
+import {
   createUniqueUserCode,
   createUniqueUserId,
   createUniqueWorkspaceId,
@@ -175,6 +183,8 @@ export const ensureAppSchema = async () => {
       try {
         await ensureColumn(connection, 'adminProfile', 'autoCreateWhatsappLeads', 'TINYINT(1) NOT NULL DEFAULT 0');
         await ensureColumn(connection, 'users', 'autoCreateWhatsappLeads', 'TINYINT(1) NOT NULL DEFAULT 0');
+        await ensureColumn(connection, 'records', 'pipeline_stage', `VARCHAR(64) NOT NULL DEFAULT '${PIPELINE_STAGE_VALUES.NEW.replace(/'/g, "\\'")}'`);
+        await ensureColumn(connection, 'duplicateRecords', 'pipeline_stage', `VARCHAR(64) NOT NULL DEFAULT '${PIPELINE_STAGE_VALUES.NEW.replace(/'/g, "\\'")}'`);
       } finally {
         connection.release();
       }
@@ -240,6 +250,7 @@ const maybeAssign = (target, key, value, predicate = value !== null && value !==
 };
 
 const mapRecordRow = (row) => {
+  const pipelineStage = normalizePipelineStage(row.pipeline_stage || row.stage || row.estadoProspeccion || '', row);
   const record = {
     id: row.id ?? null,
     nombre: row.nombre ?? 'Sin nombre',
@@ -253,14 +264,15 @@ const mapRecordRow = (row) => {
     nota: row.nota ?? '',
     categoria: row.categoria ?? '',
     canal: row.canal ?? '',
-    estadoProspeccion: row.estadoProspeccion ?? 'Nuevo',
-    stage: row.stage ?? '',
+    pipeline_stage: pipelineStage,
+    estadoProspeccion: getLegacyStatusFromPipelineStage(pipelineStage),
+    stage: getLegacyStageIdFromPipelineStage(pipelineStage),
     mensajeEnviado: toBoolean(row.mensajeEnviado),
     responsable: row.responsable ?? 'Sin Asignar',
     propietarioId: row.propietarioId ?? null,
     workspaceId: row.workspaceId ?? null,
-    inProspecting: toBoolean(row.inProspecting),
-    isArchived: toBoolean(row.isArchived),
+    inProspecting: toBoolean(row.inProspecting) || isPipelineStageInWorkspace(pipelineStage),
+    isArchived: toBoolean(row.isArchived) || isColdPipelineStage(pipelineStage),
     email: row.email ?? '',
     notes: row.notes ?? '',
     historial: [],
@@ -312,9 +324,9 @@ const loadDbSnapshot = async () => {
   ] = await Promise.all([
     queryRows('SELECT `nombre`, `avatarUrl`, `autoCreateWhatsappLeads` FROM `adminProfile` LIMIT 1'),
     queryRows('SELECT `id`, `nombre`, `email`, `password`, `codigoPropio`, `referidoPor`, `fechaRegistro`, `workspaceId`, `role`, `avatarUrl`, `autoCreateWhatsappLeads` FROM `users` ORDER BY `fechaRegistro` ASC, `id` ASC'),
-    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `records` ORDER BY `fechaIngreso` DESC, `id` DESC'),
+    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `pipeline_stage`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `records` ORDER BY `fechaIngreso` DESC, `id` DESC'),
     queryRows('SELECT `recordId`, `historial_index`, `fecha`, `accion` FROM `records_historial` ORDER BY `recordId` ASC, `historial_index` ASC'),
-    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `duplicateRecords` ORDER BY `fechaIngreso` DESC, `id` DESC'),
+    queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `pipeline_stage`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `duplicateRecords` ORDER BY `fechaIngreso` DESC, `id` DESC'),
     queryRows('SELECT `recordId`, `historial_index`, `fecha`, `accion` FROM `duplicateRecords_historial` ORDER BY `recordId` ASC, `historial_index` ASC'),
     queryRows('SELECT `id`, `hash`, `date`, `count`, `teamMemberId`, `teamMemberName`, `teamMemberCode`, `workspaceId` FROM `sharedLinks` ORDER BY `date` DESC, `id` DESC'),
     queryRows('SELECT `sharedLinkId`, `viewed`, `worked`, `contacted` FROM `sharedLinks_metrics`'),
@@ -648,7 +660,7 @@ export async function writeDb(nextDb) {
     await insertRows(
       connection,
       'records',
-      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
+      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'pipeline_stage', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
       db.records.map((record) => ({
         id: record.id ?? null,
         nombre: record.nombre ?? '',
@@ -662,14 +674,15 @@ export async function writeDb(nextDb) {
         nota: record.nota ?? '',
         categoria: record.categoria ?? '',
         canal: record.canal ?? '',
-        estadoProspeccion: record.estadoProspeccion ?? '',
-        stage: record.stage ?? '',
+        pipeline_stage: normalizePipelineStage(record.pipeline_stage, record),
+        estadoProspeccion: getLegacyStatusFromPipelineStage(record.pipeline_stage, record),
+        stage: getLegacyStageIdFromPipelineStage(record.pipeline_stage, record),
         mensajeEnviado: Boolean(record.mensajeEnviado),
         responsable: record.responsable ?? '',
         propietarioId: record.propietarioId ?? '',
         workspaceId: record.workspaceId ?? '',
-        inProspecting: Boolean(record.inProspecting),
-        isArchived: Boolean(record.isArchived),
+        inProspecting: Boolean(record.inProspecting) || isPipelineStageInWorkspace(record.pipeline_stage, record),
+        isArchived: Boolean(record.isArchived) || isColdPipelineStage(record.pipeline_stage, record),
         email: record.email ?? '',
         notes: record.notes ?? '',
         isShared: Boolean(record.isShared),
@@ -701,7 +714,7 @@ export async function writeDb(nextDb) {
     await insertRows(
       connection,
       'duplicateRecords',
-      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
+      ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'pipeline_stage', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'],
       db.duplicateRecords.map((record) => ({
         id: record.id ?? null,
         nombre: record.nombre ?? '',
@@ -715,14 +728,15 @@ export async function writeDb(nextDb) {
         nota: record.nota ?? '',
         categoria: record.categoria ?? '',
         canal: record.canal ?? '',
-        estadoProspeccion: record.estadoProspeccion ?? '',
-        stage: record.stage ?? '',
+        pipeline_stage: normalizePipelineStage(record.pipeline_stage, record),
+        estadoProspeccion: getLegacyStatusFromPipelineStage(record.pipeline_stage, record),
+        stage: getLegacyStageIdFromPipelineStage(record.pipeline_stage, record),
         mensajeEnviado: Boolean(record.mensajeEnviado),
         responsable: record.responsable ?? '',
         propietarioId: record.propietarioId ?? '',
         workspaceId: record.workspaceId ?? '',
-        inProspecting: Boolean(record.inProspecting),
-        isArchived: Boolean(record.isArchived),
+        inProspecting: Boolean(record.inProspecting) || isPipelineStageInWorkspace(record.pipeline_stage, record),
+        isArchived: Boolean(record.isArchived) || isColdPipelineStage(record.pipeline_stage, record),
         email: record.email ?? '',
         notes: record.notes ?? '',
         isShared: Boolean(record.isShared),

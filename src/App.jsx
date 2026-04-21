@@ -64,11 +64,19 @@ import { WhatsAppIcon } from './components/WhatsAppIcon';
 import { RecordCard } from './components/RecordCard';
 import { SettingsDrawer } from './components/SettingsDrawer';
 import { RecordDetailModal } from './components/RecordDetailModal';
-import { ESTADOS_PROSPECCION, ORIGENES, PAISES, PREFIX_TO_ISO, STORAGE_KEYS } from './lib/constants';
+import { ORIGENES, PAISES, PREFIX_TO_ISO, STORAGE_KEYS } from './lib/constants';
 import { getLocalISODate } from './lib/date';
 import { api } from './lib/api';
 import { FAVICON_PULSE_EVENT, triggerFaviconPulse } from './lib/favicon';
 import { LANG_LOCALES, translate } from './lib/i18n';
+import {
+  getPipelineStageMeta,
+  isColdPipelineStage,
+  isLostPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from './lib/lead-pipeline';
 import { buildLeadIdentity, normalizePhone } from './lib/lead-utils';
 import { useBackendSync } from './hooks/useBackendSync';
 import { useCrmDataState } from './hooks/useCrmDataState';
@@ -153,6 +161,10 @@ function mergeUniqueUsers(...userGroups) {
 
   return merged;
 }
+
+const isLostLead = (record) => isLostPipelineStage(record?.pipeline_stage, record);
+const isArchivedLead = (record) => isColdPipelineStage(record?.pipeline_stage, record) || Boolean(record?.isArchived);
+const isWorkspaceLead = (record) => isPipelineStageInWorkspace(record?.pipeline_stage, record);
 
 function buildWorkspaceLeadCountsForUsers(users = [], sourceRecords = []) {
   return Object.fromEntries(
@@ -960,7 +972,7 @@ export default function App() {
     setSelectedRecord,
   });
   const dashboardDisplayedRecords = useMemo(() => {
-    const visibleRecords = records.filter((record) => record.estadoProspeccion !== 'Liquidado');
+    const visibleRecords = records.filter((record) => !isLostLead(record));
     if (dashboardSectorFilter === 'ALL') {
       return visibleRecords;
     }
@@ -1134,7 +1146,7 @@ export default function App() {
   ];
 
   const handleOpenWorkspaceConversation = useCallback((record) => {
-    const isArchivedRecord = Boolean(record?.isArchived) || record?.estadoProspeccion === 'Archivado';
+    const isArchivedRecord = isArchivedLead(record);
     if (typeof window !== 'undefined' && record?.id) {
       try {
         window.sessionStorage.setItem('crm-workspace-target-conversation', JSON.stringify({
@@ -1523,7 +1535,7 @@ function CleanDashboardView({
 
   // Nuevas métricas globales
   const totalUsuarios = usersDb.length;
-  const enProspeccion = globalRecords.filter(r => r.estadoProspeccion === 'En prospección' || r.inProspecting).length;
+  const enProspeccion = globalRecords.filter((record) => isWorkspaceLead(record)).length;
 
   // --- NUEVO: GRÁFICO EVOLUCIÓN DE CAPTACIÓN (GLOBAL) ---
   const last7Days = Array.from({length: 7}, (_, i) => {
@@ -1602,11 +1614,11 @@ function CleanDashboardView({
     () =>
       [...records]
         .filter((record) => {
-          const status = record.estadoProspeccion || 'Nuevo';
+          const status = normalizePipelineStage(record.pipeline_stage, record);
           return (
             record.workspaceId === adminWorkspaceId &&
             !record.sourceRecordId &&
-            status === 'Nuevo' &&
+            status === PIPELINE_STAGE_VALUES.NEW &&
             !sharedSourceIds.has(record.id)
           );
         })
@@ -1617,10 +1629,10 @@ function CleanDashboardView({
         ),
     [adminWorkspaceId, records, sharedSourceIds],
   );
-  const liquidatedGlobalLeadRows = useMemo(
+  const lostGlobalLeadRows = useMemo(
     () =>
       globalLeadRows.filter(
-        (record) => (record.estadoProspeccion || '') === 'Liquidado',
+        (record) => isLostLead(record),
       ),
     [globalLeadRows],
   );
@@ -1648,8 +1660,8 @@ function CleanDashboardView({
           record.responsable === user.nombre,
       );
       const userContacted = userRecords.filter((record) => record.mensajeEnviado).length;
-      const userProspecting = userRecords.filter((record) => record.estadoProspeccion === 'En prospección' || record.inProspecting).length;
-      const userArchived = userRecords.filter((record) => record.estadoProspeccion === 'Archivado' || record.isArchived).length;
+      const userProspecting = userRecords.filter((record) => isWorkspaceLead(record)).length;
+      const userArchived = userRecords.filter((record) => isArchivedLead(record)).length;
       const representedLeadIds = new Set(
         userRecords.flatMap((record) => [record.id, record.sourceRecordId].filter(Boolean)),
       );
@@ -1695,8 +1707,8 @@ function CleanDashboardView({
         ? shareableGlobalLeadRows
         : globalLeadTab === 'shared'
           ? sharedHistoryRows
-          : globalLeadTab === 'liquidated'
-            ? liquidatedGlobalLeadRows
+          : globalLeadTab === 'lost'
+            ? lostGlobalLeadRows
             : globalLeadRows;
 
     if (!needle) return sourceRows;
@@ -1729,7 +1741,7 @@ function CleanDashboardView({
         record.nombre,
         record.numero,
         record.correo,
-        record.estadoProspeccion,
+        getPipelineStageMeta(record.pipeline_stage, record).label,
         ownerName,
         record.sector,
         record.origen,
@@ -1951,7 +1963,7 @@ function CleanDashboardView({
       all: 'todos',
       shareable: 'disponibles',
       shared: 'compartidos',
-      liquidated: 'liquidados',
+      lost: 'lost',
     };
 
     if (globalLeadTab === 'shared') {
@@ -2028,7 +2040,7 @@ function CleanDashboardView({
         record.responsable || '',
         record.numero || '',
         record.correo || '',
-        record.estadoProspeccion || 'Nuevo',
+        getPipelineStageMeta(record.pipeline_stage, record).label,
         record.sector || 'Sin sector',
         record.origen || '',
         countryName,
@@ -2119,7 +2131,7 @@ function CleanDashboardView({
                       { id: 'all', label: 'Todos' },
                       { id: 'shareable', label: 'Disponibles' },
                       { id: 'shared', label: 'Compartidos' },
-                      { id: 'liquidated', label: 'Liquidados' },
+                      { id: 'lost', label: 'Lost' },
                     ].map((tab) => (
                       <button
                         key={tab.id}
@@ -2355,19 +2367,14 @@ function CleanDashboardView({
                                   </div>
                                 </td>
                                 <td className="px-4 py-4 align-top">
-                                  <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
-                                    record.estadoProspeccion === 'Descartado'
-                                      ? isDarkMode ? 'bg-rose-500/10 text-rose-300' : 'bg-rose-50 text-rose-600'
-                                      : record.estadoProspeccion === 'Liquidado'
-                                        ? isDarkMode ? 'bg-slate-500/20 text-slate-200' : 'bg-slate-100 text-slate-700'
-                                      : record.estadoProspeccion === 'Archivado'
-                                        ? isDarkMode ? 'bg-amber-500/10 text-amber-300' : 'bg-amber-50 text-amber-600'
-                                        : record.estadoProspeccion === 'En prospección'
-                                          ? isDarkMode ? 'bg-blue-500/10 text-blue-300' : 'bg-blue-50 text-blue-600'
-                                          : isDarkMode ? 'bg-emerald-500/10 text-emerald-300' : 'bg-emerald-50 text-emerald-700'
-                                  }`}>
-                                    {record.estadoProspeccion || 'Nuevo'}
-                                  </span>
+                                  {(() => {
+                                    const stageMeta = getPipelineStageMeta(record.pipeline_stage, record);
+                                    return (
+                                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${stageMeta.classes}`}>
+                                        {stageMeta.label}
+                                      </span>
+                                    );
+                                  })()}
                                 </td>
                                 <td className={`px-4 py-4 text-right align-top text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
                                   {record.fechaIngreso ? new Date(record.fechaIngreso).toLocaleDateString(locale) : '--/--/----'}
@@ -2426,8 +2433,8 @@ function CleanDashboardView({
                       }`}>
                         {globalLeadTab === 'shareable'
                           ? 'No hay leads nuevos disponibles para compartir con este filtro.'
-                          : globalLeadTab === 'liquidated'
-                            ? 'No hay leads liquidados con este filtro.'
+                          : globalLeadTab === 'lost'
+                            ? 'No hay leads lost con este filtro.'
                           : 'No se encontraron leads con ese filtro.'}
                       </div>
                     )}

@@ -4,6 +4,7 @@ import { AvatarInitials } from '../components/AvatarInitials';
 import { PAISES } from '../lib/constants';
 import { getRecordCountryCode } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
+import { normalizePipelineStage, PIPELINE_STAGE_VALUES } from '../lib/lead-pipeline';
 import { useSectors } from '../hooks/useSectors';
 
 function ShareLeadsModal({ onClose, records, teamMembers, onGenerated, t }) {
@@ -32,7 +33,7 @@ function ShareLeadsModal({ onClose, records, teamMembers, onGenerated, t }) {
 
   const availablePool = useMemo(() => {
     return records.filter(r =>
-      r.estadoProspeccion === 'Nuevo' &&
+      normalizePipelineStage(r.pipeline_stage, r) === PIPELINE_STAGE_VALUES.NEW &&
       (!r.responsable || r.responsable === 'Sin Asignar' || r.responsable.trim() === '') &&
       (filterPais === 'ALL' || getRecordCountryCode(r) === filterPais) &&
       (filterSector === 'ALL' || r.sector === filterSector)
@@ -221,7 +222,7 @@ export function NetworkView({ currentUser, usersDb, sharedLinks, records, onLink
   const availableNewLeads = useMemo(
     () =>
       records.filter((record) =>
-        record.estadoProspeccion === 'Nuevo' &&
+        normalizePipelineStage(record.pipeline_stage, record) === PIPELINE_STAGE_VALUES.NEW &&
         (!record.responsable || record.responsable === 'Sin Asignar' || record.responsable.trim() === ''),
       ).length,
     [records],

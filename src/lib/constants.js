@@ -34,14 +34,6 @@ export const ORIGENES = [
   'Instagram Scraping',
 ];
 
-export const ESTADOS_PROSPECCION = [
-  { id: 'Nuevo', color: 'bg-[#FF5A1F]', bgLight: 'bg-[#FFF0EB]', text: 'text-[#FF5A1F]', border: 'border-orange-200' },
-  { id: 'En prospección', color: 'bg-amber-500', bgLight: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200' },
-  { id: 'Archivado', color: 'bg-slate-500', bgLight: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-300' },
-  { id: 'Descartado', color: 'bg-rose-500', bgLight: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200' },
-  { id: 'Liquidado', color: 'bg-slate-900', bgLight: 'bg-slate-200', text: 'text-slate-700', border: 'border-slate-300' },
-];
-
 export const PREFIX_TO_ISO = {
   '+51': 'PE',
   '+52': 'MX',

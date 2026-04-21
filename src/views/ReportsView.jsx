@@ -4,10 +4,22 @@ import { AvatarInitials } from '../components/AvatarInitials';
 import { api } from '../lib/api';
 import { PAISES } from '../lib/constants';
 import { getLocalISODate } from '../lib/date';
+import {
+  isColdPipelineStage,
+  isLostPipelineStage,
+  isPipelineStageWorked,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from '../lib/lead-pipeline';
 import { usePersistentState } from '../hooks/usePersistentState';
 import { LANG_LOCALES } from '../lib/i18n';
 
-const isLiquidatedLead = (record) => record.estadoProspeccion === 'Liquidado';
+const isLostLead = (record) => isLostPipelineStage(record?.pipeline_stage, record);
+const isArchivedLead = (record) => isColdPipelineStage(record?.pipeline_stage, record) || Boolean(record?.isArchived);
+const isResponsiveLead = (record) => {
+  const stage = normalizePipelineStage(record?.pipeline_stage, record);
+  return [PIPELINE_STAGE_VALUES.HOT_LEAD, PIPELINE_STAGE_VALUES.PAGO, PIPELINE_STAGE_VALUES.CLIENTE].includes(stage);
+};
 
 function getLatestRealContactEntry(record) {
   const contactLogs = (record?.historial || []).filter((entry) => {
@@ -127,14 +139,14 @@ export function ReportsView({ records, duplicateRecords = [], currentUser, myAge
     const ownerName = currentUser?.nombre;
     const misLeads = records.filter((r) =>
       (r.propietarioId === ownerId || r.responsable === ownerName) &&
-      !isLiquidatedLead(r),
+      !isLostLead(r),
     );
-    const misTrabajados = misLeads.filter(r => r.estadoProspeccion !== 'Nuevo').length;
+    const misTrabajados = misLeads.filter((record) => isPipelineStageWorked(record?.pipeline_stage, record)).length;
     const misContactados = misLeads.filter(r => r.mensajeEnviado).length;
-    const misRespondieron = misLeads.filter(r => r.estadoProspeccion === 'Respondió').length;
+    const misRespondieron = misLeads.filter(isResponsiveLead).length;
 
     const misArchivadosMes = misLeads.filter(r => {
-      if (r.estadoProspeccion !== 'Archivado' && !r.isArchived) return false;
+      if (!isArchivedLead(r)) return false;
       return (r.historial || []).some(h => getLocalISODate(new Date(h.fecha)).startsWith(currentMonthPrefix));
     }).length;
 
@@ -172,7 +184,7 @@ export function ReportsView({ records, duplicateRecords = [], currentUser, myAge
     );
     const teamReceivedRecords = records.filter((record) => {
       if (!record.sourceRecordId || !sharedSourceIds.has(record.sourceRecordId)) return false;
-      if (record.estadoProspeccion === 'Descartado' || isLiquidatedLead(record)) return false;
+      if (isLostLead(record)) return false;
       return (
         (record.propietarioId && teamMemberIds.has(record.propietarioId)) ||
         (record.workspaceId && teamMemberWorkspaces.has(record.workspaceId)) ||
@@ -183,7 +195,7 @@ export function ReportsView({ records, duplicateRecords = [], currentUser, myAge
     const teamWorkedPredicate = (record) =>
       Boolean(record.mensajeEnviado) ||
       Boolean(getLatestRealContactEntry(record)) ||
-      (record.estadoProspeccion !== 'Nuevo' && record.estadoProspeccion !== 'Archivado');
+      isPipelineStageWorked(record?.pipeline_stage, record);
     const agentesStats = teamMembers.map((member) => {
       const leads = teamReceivedRecords.filter(
         (record) =>

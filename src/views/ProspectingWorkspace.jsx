@@ -5,15 +5,24 @@ import chatWallpaperDark from '../assets/chat-wallpaper-dark.svg';
 import chatWallpaperLight from '../assets/chat-wallpaper-light.svg';
 import whatsappIconWhite from '../assets/whatsapp-icon-white.svg';
 import { api } from '../lib/api';
-import { ESTADOS_PROSPECCION } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
 import { triggerFaviconPulse } from '../lib/favicon';
-import { getPipelineStageMeta } from '../lib/lead-pipeline';
+import {
+  getLegacyStageIdFromPipelineStage,
+  getLegacyStatusFromPipelineStage,
+  getPipelineStageMeta,
+  getPipelineStageOptions,
+  isColdPipelineStage,
+  isLostPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from '../lib/lead-pipeline';
 import { getSectorIcon, getSectorLabel } from '../lib/sector-utils';
 import { getWhatsAppInboxCache, setWhatsAppInboxCache } from '../lib/whatsapp-cache';
 import { getWhatsAppCatalog, getWhatsAppQuickReplies, saveWhatsAppCatalog, saveWhatsAppQuickReplies } from '../lib/whatsapp-tools';
-import { LANG_LOCALES, translateStatus } from '../lib/i18n';
+import { LANG_LOCALES } from '../lib/i18n';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
 import { useSectors } from '../hooks/useSectors';
 
@@ -22,9 +31,20 @@ const DAILY_GOAL_EVENT_TAG = '[META DIARIA]';
 const GENERIC_INBOX_NAMES = new Set(['usuario wa', 'sin nombre', 'usuario ig', 'lead', 'prospecto']);
 const BIGDATA_ORANGE = '#ff7a1a';
 const WHATSAPP_GREEN = '#25d366';
-const isLiquidatedLead = (record) => record.estadoProspeccion === 'Liquidado';
-const isDiscardedLead = (record) => record.estadoProspeccion === 'Descartado';
-const isArchivedLead = (record) => (record.estadoProspeccion === 'Archivado' || record.isArchived) && !isDiscardedLead(record) && !isLiquidatedLead(record);
+const isLostLead = (record) => isLostPipelineStage(record?.pipeline_stage, record);
+const isArchivedLead = (record) => isColdPipelineStage(record?.pipeline_stage, record) || Boolean(record?.isArchived);
+
+const applyPipelineStageToRecord = (record, nextPipelineStage) => {
+  const pipelineStage = normalizePipelineStage(nextPipelineStage, record);
+  return {
+    ...record,
+    pipeline_stage: pipelineStage,
+    estadoProspeccion: getLegacyStatusFromPipelineStage(pipelineStage, record),
+    stage: getLegacyStageIdFromPipelineStage(pipelineStage, record),
+    inProspecting: isPipelineStageInWorkspace(pipelineStage, record),
+    isArchived: isColdPipelineStage(pipelineStage, record),
+  };
+};
 
 function DonRafaelReactionIcon({ className = '' }) {
   return (
@@ -201,6 +221,8 @@ function LeadDetailsModal({
   onSaveNotes,
 }) {
   if (!activeLead) return null;
+  const pipelineOptions = getPipelineStageOptions().filter((option) => option.value !== PIPELINE_STAGE_VALUES.LOST);
+  const activeStageValue = normalizePipelineStage(activeLead.pipeline_stage, activeLead);
 
   return (
     <div className="fixed inset-0 z-[85] flex items-start justify-center p-4 sm:p-6">
@@ -327,13 +349,13 @@ function LeadDetailsModal({
                 <div>
                   <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">{t('ws_lead_status')}</p>
                   <select
-                    value={activeLead.estadoProspeccion || 'Nuevo'}
+                    value={activeStageValue}
                     disabled={isViewOnly}
                     onChange={(e) => onChangeStatus(activeLead.id, e.target.value)}
                     className={`w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition-all focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100 ${isViewOnly ? 'cursor-not-allowed opacity-70' : ''}`}
                   >
-                    {ESTADOS_PROSPECCION.filter((status) => status.id !== 'Descartado' && status.id !== 'Liquidado').map((status) => (
-                      <option key={status.id} value={status.id}>{translateStatus(language, status.id)}</option>
+                    {pipelineOptions.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
                 </div>
@@ -2657,7 +2679,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
 
   const activeRecords = useMemo(() => {
     return ownerScopedRecords
-      .filter(r => r.inProspecting && !isArchivedLead(r) && !isLiquidatedLead(r) &&
+      .filter(r => r.inProspecting && !isArchivedLead(r) && !isLostLead(r) &&
         (r.nombre.toLowerCase().includes(normalizedSearch) ||
          (r.numero && r.numero.includes(searchTerm)) ||
          (r.correo && r.correo.toLowerCase().includes(normalizedSearch)))
@@ -2765,7 +2787,9 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
         historial: matchedRecord?.historial || [],
         nota: matchedRecord?.nota || '',
         fechaIngreso: matchedRecord?.fechaIngreso || '',
-        estadoProspeccion: matchedRecord?.estadoProspeccion || 'Nuevo',
+        pipeline_stage: normalizePipelineStage(matchedRecord?.pipeline_stage, matchedRecord || baseRecord),
+        estadoProspeccion: matchedRecord?.estadoProspeccion || getLegacyStatusFromPipelineStage(normalizePipelineStage(matchedRecord?.pipeline_stage, matchedRecord || baseRecord)),
+        stage: matchedRecord?.stage || getLegacyStageIdFromPipelineStage(normalizePipelineStage(matchedRecord?.pipeline_stage, matchedRecord || baseRecord)),
         isArchived: matchedRecord ? matchedRecord.isArchived : false,
         inProspecting: matchedRecord ? matchedRecord.inProspecting : true,
         mensajeEnviado: matchedRecord ? matchedRecord.mensajeEnviado : false,
@@ -2813,8 +2837,9 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
         subsector: thread.subsector || '',
         categoria: thread.categoria || '-',
         pais: thread.pais || 'OT',
-        estadoProspeccion: 'Nuevo',
-        stage: 'new_lead',
+        pipeline_stage: PIPELINE_STAGE_VALUES.NEW,
+        estadoProspeccion: getLegacyStatusFromPipelineStage(PIPELINE_STAGE_VALUES.NEW),
+        stage: getLegacyStageIdFromPipelineStage(PIPELINE_STAGE_VALUES.NEW),
         responsable: ownerName || 'Sin Asignar',
         propietarioId: ownerId || null,
         inProspecting: true,
@@ -2990,7 +3015,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
 
   const handleFillWorkspace = () => {
     if (isViewOnly) return;
-    const actualActiveCount = records.filter((r) => (r.propietarioId === ownerId || r.responsable === ownerName) && r.inProspecting && !isArchivedLead(r) && !isLiquidatedLead(r)).length;
+    const actualActiveCount = records.filter((r) => (r.propietarioId === ownerId || r.responsable === ownerName) && r.inProspecting && !isArchivedLead(r) && !isLostLead(r)).length;
     const needed = Math.max(0, 15 - actualActiveCount);
     if (needed > 0) {
       setWorkspaceNotice(null);
@@ -3045,17 +3070,14 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
 
     const currentIndex = currentList.findIndex((candidate) => candidate.id === record.id);
     const nextLead = currentList[currentIndex + 1] || currentList[currentIndex - 1] || null;
-    const countsTowardDailyGoal = workspaceTab === 'active' && !isArchivedLead(record) && !isLiquidatedLead(record);
+    const countsTowardDailyGoal = workspaceTab === 'active' && !isArchivedLead(record) && !isLostLead(record);
     const contactAction = countsTowardDailyGoal
-      ? `💬 [CONTACTO REAL]${DAILY_GOAL_EVENT_TAG} Enlace de WhatsApp abierto y lead archivado automáticamente`
-      : '💬 [CONTACTO ARCHIVADO] Enlace de WhatsApp abierto desde Archivados';
+      ? `💬 [CONTACTO REAL]${DAILY_GOAL_EVENT_TAG} Enlace de WhatsApp abierto y lead movido a ${PIPELINE_STAGE_VALUES.COLD_LEAD}`
+      : `💬 [CONTACTO ARCHIVADO] Enlace de WhatsApp abierto desde ${PIPELINE_STAGE_VALUES.COLD_LEAD}`;
 
     onUpdateRecord({
-      ...record,
+      ...applyPipelineStageToRecord(record, PIPELINE_STAGE_VALUES.COLD_LEAD),
       mensajeEnviado: true,
-      estadoProspeccion: 'Archivado',
-      isArchived: true,
-      inProspecting: true,
       historial: [{ fecha: getLocalISOTime(), accion: contactAction }, ...(record.historial || [])]
     });
     setShowCustomMsg(false);
@@ -3090,11 +3112,8 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
     const currentIndex = activeRecords.findIndex((candidate) => candidate.id === record.id);
     const nextLead = activeRecords[currentIndex + 1] || activeRecords[currentIndex - 1] || null;
     onUpdateRecord({
-      ...record,
-      estadoProspeccion: 'Descartado',
-      inProspecting: false,
-      isArchived: false,
-      historial: [{ fecha: getLocalISOTime(), accion: 'Lead marcado como Descartado/Inválido' }, ...(record.historial || [])]
+      ...applyPipelineStageToRecord(record, PIPELINE_STAGE_VALUES.LOST),
+      historial: [{ fecha: getLocalISOTime(), accion: `Lead marcado como ${PIPELINE_STAGE_VALUES.LOST}` }, ...(record.historial || [])]
     });
     setShowCustomMsg(false);
     setActiveLeadId(nextLead?.id || null);
@@ -3295,7 +3314,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
             const inboxSnippet = getInboxSnippet(record, t);
             const inboxTimestamp = getInboxTimestamp(record, locale);
             const hasAutomatedSnippet = isAutomatedInboxSnippet(record);
-            const pipelineStage = getPipelineStageMeta(record.stage, record);
+            const pipelineStage = getPipelineStageMeta(record.pipeline_stage, record);
             const statusLabel = pipelineStage.label;
             const openedKey = String(record.__chatJid || record.id || '').trim();
             const isChatOpened = openedKey ? openedInboxKeys.includes(openedKey) : false;

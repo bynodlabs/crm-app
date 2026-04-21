@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  getLegacyStageIdFromPipelineStage,
+  getLegacyStatusFromPipelineStage,
+  normalizePipelineStage,
+} from '../server/src/lead-pipeline.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -113,7 +118,9 @@ const main = async () => {
     nota: row.nota ?? '',
     categoria: row.categoria ?? '',
     canal: row.canal ?? '',
-    estadoProspeccion: row.estadoProspeccion ?? '',
+    pipeline_stage: normalizePipelineStage(row.pipeline_stage || row.stage || row.estadoProspeccion || '', row),
+    estadoProspeccion: getLegacyStatusFromPipelineStage(normalizePipelineStage(row.pipeline_stage || row.stage || row.estadoProspeccion || '', row)),
+    stage: getLegacyStageIdFromPipelineStage(normalizePipelineStage(row.pipeline_stage || row.stage || row.estadoProspeccion || '', row)),
     mensajeEnviado: Boolean(row.mensajeEnviado),
     responsable: row.responsable ?? '',
     propietarioId: row.propietarioId ?? '',
@@ -214,9 +221,9 @@ const main = async () => {
 
   writeBatches('adminProfile', ['nombre', 'avatarUrl'], adminProfileRows);
   writeBatches('users', ['id', 'nombre', 'email', 'password', 'codigoPropio', 'referidoPor', 'fechaRegistro', 'workspaceId', 'role', 'avatarUrl'], users);
-  writeBatches('records', ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'], records);
+  writeBatches('records', ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'pipeline_stage', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'], records);
   writeBatches('records_historial', ['recordId', 'historial_index', 'fecha', 'accion'], recordsHistorial);
-  writeBatches('duplicateRecords', ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'estadoProspeccion', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'], duplicateRecords);
+  writeBatches('duplicateRecords', ['id', 'nombre', 'pais', 'numero', 'correo', 'sector', 'subsector', 'origen', 'fechaIngreso', 'nota', 'categoria', 'canal', 'pipeline_stage', 'estadoProspeccion', 'stage', 'mensajeEnviado', 'responsable', 'propietarioId', 'workspaceId', 'inProspecting', 'isArchived', 'email', 'notes', 'isShared', 'sharedAt', 'sharedToUserId', 'sharedToUserName', 'receivedBatchId', 'receivedAt', 'sharedFromUserId', 'sharedFromUserName', 'sourceRecordId'], duplicateRecords);
   writeBatches('duplicateRecords_historial', ['recordId', 'historial_index', 'fecha', 'accion'], duplicateRecordsHistorial);
   writeBatches('sharedLinks', ['id', 'hash', 'date', 'count', 'teamMemberId', 'teamMemberName', 'teamMemberCode', 'workspaceId'], sharedLinks);
   writeBatches('sharedLinks_metrics', ['sharedLinkId', 'viewed', 'worked', 'contacted'], sharedLinksMetrics);

@@ -1,17 +1,24 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
 import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, MessageCircle, Search, Sliders, Trash2, User, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
-import { ESTADOS_PROSPECCION, ORIGENES, PAISES } from '../lib/constants';
+import { ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
-import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
+import {
+  getPipelineStageMeta,
+  getPipelineStageOptions,
+  isColdPipelineStage,
+  isLostPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from '../lib/lead-pipeline';
 import { getSectorByCode, getSectorLabel, normalizeSectorCode } from '../lib/sector-utils';
 import { useSectors } from '../hooks/useSectors';
 
 const DIRECTORY_PAGE_SIZE = 100;
-const isLiquidatedLead = (record) => record.estadoProspeccion === 'Liquidado';
-const isDiscardedLead = (record) => record.estadoProspeccion === 'Descartado';
-const isArchivedLead = (record) => (record.estadoProspeccion === 'Archivado' || record.isArchived) && !isDiscardedLead(record) && !isLiquidatedLead(record);
-const countsAsProspecting = (record) => record.estadoProspeccion !== 'Nuevo' && !isDiscardedLead(record) && !isLiquidatedLead(record);
+const isLostLead = (record) => isLostPipelineStage(record?.pipeline_stage, record);
+const isArchivedLead = (record) => isColdPipelineStage(record?.pipeline_stage, record) || Boolean(record?.isArchived);
+const countsAsProspecting = (record) => isPipelineStageInWorkspace(record?.pipeline_stage, record);
 const normalizePhoneDigits = (value = '') => String(value || '').replace(/\D/g, '');
 const CSV_FIELD_OPTIONS = [
   { key: 'nombre', label: 'Nombre', getValue: (record) => record.nombre || '' },
@@ -93,7 +100,7 @@ const downloadCsvFile = (filename, headers, rows) => {
   URL.revokeObjectURL(url);
 };
 
-export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversation, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
+export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversation, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, onPermanentDeleteRecords, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
   const { sectors, visibleSectors } = useSectors({ records });
   const [showFilters, setShowFilters] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
@@ -106,8 +113,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
   const [filters, setFilters] = useState({
     pais: 'ALL',
     categoria: 'ALL',
-    estado: 'ALL',
-    stage: 'ALL',
+    pipeline_stage: 'ALL',
     origen: 'ALL',
     mensaje: 'ALL',
     responsable: 'ALL',
@@ -137,14 +143,14 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
   );
 
   const workspaceRecords = useMemo(() => {
-    return records.filter((record) => !isLiquidatedLead(record));
+    return records;
   }, [records]);
 
   const myDuplicateRecords = useMemo(() => duplicateRecords || [], [duplicateRecords]);
 
   const tabScopedRecords = useMemo(() => {
     return workspaceRecords.filter((record) => {
-      const isLeadDiscarded = isDiscardedLead(record);
+      const isLeadDiscarded = isLostLead(record);
       const isLeadArchivedRecord = isArchivedLead(record);
       const isSharedRecord = Boolean(record.isShared) || sharedSourceIds.has(record.id);
       return (
@@ -176,8 +182,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
 
       const matchesPais = filters.pais === 'ALL' || record.pais === filters.pais;
       const matchesCategoria = filters.categoria === 'ALL' || record.categoria === filters.categoria;
-      const matchesEstado = filters.estado === 'ALL' || (record.estadoProspeccion || 'Nuevo') === filters.estado;
-      const matchesStage = filters.stage === 'ALL' || normalizeLeadStage(record.stage, record) === filters.stage;
+      const matchesPipelineStage = filters.pipeline_stage === 'ALL' || normalizePipelineStage(record.pipeline_stage, record) === filters.pipeline_stage;
       const matchesSector = globalSectorFilter === 'ALL' || normalizeSectorCode(record.sector) === globalSectorFilter;
       const matchesOrigen = filters.origen === 'ALL' || record.origen === filters.origen;
       const matchesMensaje = filters.mensaje === 'ALL' || (filters.mensaje === 'ENVIADO' ? record.mensajeEnviado : !record.mensajeEnviado);
@@ -185,7 +190,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
       const isProspecting = countsAsProspecting(record);
       const matchesEspacio = filters.espacio === 'ALL' || (filters.espacio === 'IN' ? isProspecting : !isProspecting);
 
-      return matchesSearch && matchesPais && matchesCategoria && matchesEstado && matchesStage && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio;
+      return matchesSearch && matchesPais && matchesCategoria && matchesPipelineStage && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio;
     });
   }, [deferredSearchTerm, filters, getSectorName, globalSectorFilter, tabScopedRecords]);
   const displayRecords = filteredRecords;
@@ -325,15 +330,18 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
 
     const isLiquidatingDiscarded = directoryTab === 'descartados';
     setConfirmDirectoryAction({
-      title: isLiquidatingDiscarded ? 'Liquidar leads' : 'Mover a Eliminados',
+      title: isLiquidatingDiscarded ? 'Eliminar leads perdidos' : 'Mover a Lost',
       message: isLiquidatingDiscarded
-        ? `Se liquidarán ${effectiveSelectedIds.length} leads seleccionados. Dejarán de aparecer para el socio y quedarán guardados internamente con estatus Liquidado.`
-        : `Se eliminarán ${effectiveSelectedIds.length} leads seleccionados y se moverán a Eliminados.`,
-      confirmLabel: isLiquidatingDiscarded ? 'Sí, liquidar' : 'Sí, eliminar',
+        ? `Se eliminarán definitivamente ${effectiveSelectedIds.length} leads perdidos seleccionados.`
+        : `Se moverán ${effectiveSelectedIds.length} leads seleccionados a 🚫 Lost.`,
+      confirmLabel: isLiquidatingDiscarded ? 'Sí, eliminar definitivo' : 'Sí, mover a Lost',
       confirmTone: 'danger',
       onConfirm: () => {
-        handleBulkMove(isLiquidatingDiscarded ? 'Liquidado' : 'Descartado');
-        if (!isLiquidatingDiscarded) {
+        if (isLiquidatingDiscarded) {
+          onPermanentDeleteRecords?.(effectiveSelectedIds);
+          setSelectedIds([]);
+        } else {
+          handleBulkMove(PIPELINE_STAGE_VALUES.LOST);
           setDirectoryTab('descartados');
         }
         setCurrentPage(1);
@@ -537,7 +545,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
               <Sliders size={16} className="text-[#FF5A1F]" /> {t('dir_filters_title')}
             </h3>
             {activeFiltersCount > 0 && (
-              <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); setCurrentPage(1); clearSelection(); }} className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
+              <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', pipeline_stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); setCurrentPage(1); clearSelection(); }} className="text-xs font-bold text-slate-400 hover:text-slate-600 transition-colors">
                 {t('dir_clear_filters')}
               </button>
             )}
@@ -563,17 +571,10 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
               </select>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pl-2">{t('dir_flt_status')}</label>
-              <select value={filters.estado} onChange={(e) => { setFilters({ ...filters, estado: e.target.value }); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
-                <option value="ALL">{t('dir_opt_all')}</option>
-                {ESTADOS_PROSPECCION.filter((est) => est.id !== 'Descartado' && est.id !== 'Liquidado').map(est => <option key={est.id} value={est.id}>{est.id}</option>)}
-              </select>
-            </div>
-            <div>
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pl-2">Pipeline</label>
-              <select value={filters.stage} onChange={(e) => { setFilters({ ...filters, stage: e.target.value }); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
+              <select value={filters.pipeline_stage} onChange={(e) => { setFilters({ ...filters, pipeline_stage: e.target.value }); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
                 <option value="ALL">Todos</option>
-                {pipelineOptions.map((stage) => <option key={stage.id} value={stage.id}>{stage.icon} {stage.label}</option>)}
+                {pipelineOptions.map((stage) => <option key={stage.id} value={stage.value}>{stage.label}</option>)}
               </select>
             </div>
             <div>
@@ -781,7 +782,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
           <div className="space-y-3 md:hidden">
             {visibleRecords.length > 0 ? visibleRecords.map((r) => {
               const paisData = getCountryMetaForRecord(r);
-              const stageMeta = getPipelineStageMeta(r.stage, r);
+              const stageMeta = getPipelineStageMeta(r.pipeline_stage, r);
               const qualityClass = r.categoria === 'A' ? 'bg-emerald-100 text-emerald-600' : r.categoria === 'B' ? 'bg-orange-100 text-[#FF5A1F]' : r.categoria === 'C' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400';
 
               return (
@@ -822,7 +823,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold ${stageMeta.classes}`}>
-                      {stageMeta.icon} {stageMeta.label}
+                      {stageMeta.icon} {stageMeta.shortLabel}
                     </span>
                   </div>
                 </div>
@@ -833,7 +834,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                 <p className="mb-1 text-sm font-medium text-slate-500">{t('dir_no_matches')}</p>
                 <p className="text-xs text-slate-400">{t('dir_try_relax')}</p>
                 {activeFiltersCount > 0 && (
-                  <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 rounded-full bg-orange-50 px-4 py-2 text-xs font-bold text-[#FF5A1F] transition-colors hover:bg-orange-100">
+                  <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', pipeline_stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 rounded-full bg-orange-50 px-4 py-2 text-xs font-bold text-[#FF5A1F] transition-colors hover:bg-orange-100">
                     {t('dir_clear_filters')}
                   </button>
                 )}
@@ -872,7 +873,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                 const ownerData = myAgents.find(a => a.nombre === r.responsable) || myAgents[0];
                 const inProspecting = countsAsProspecting(r);
                 const sectorLabel = getSectorName(r.sector);
-                const stageMeta = getPipelineStageMeta(r.stage, r);
+                const stageMeta = getPipelineStageMeta(r.pipeline_stage, r);
 
                 return (
                   <tr key={r.id} onClick={() => onSelectRecord(r)} className={`transition-colors group cursor-pointer ${canBulkSelect && effectiveSelectedIds.includes(r.id) ? 'bg-orange-50/50' : 'hover:bg-slate-50/50'}`}>
@@ -923,7 +924,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                       {!isSharedArchiveView && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); onChangeStatus(r.id, inProspecting ? 'Nuevo' : 'En prospección'); }}
+                          onClick={(e) => { e.stopPropagation(); onChangeStatus(r.id, inProspecting ? PIPELINE_STAGE_VALUES.NEW : PIPELINE_STAGE_VALUES.NEW_LEAD); }}
                           title={inProspecting ? t('dir_remove_ws') : t('dir_add_to_ws')}
                           className={`p-2 rounded-full transition-colors ${inProspecting ? 'text-[#FF5A1F] bg-orange-50 hover:bg-orange-100' : 'text-slate-300 hover:text-[#FF5A1F] hover:bg-orange-100'}`}
                         >
@@ -955,7 +956,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                       <p className="text-sm font-medium text-slate-500 mb-1">{t('dir_no_matches')}</p>
                       <p className="text-xs text-slate-400">{t('dir_try_relax')}</p>
                       {activeFiltersCount > 0 && (
-                        <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', estado: 'ALL', stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 px-4 py-2 bg-orange-50 text-[#FF5A1F] rounded-full text-xs font-bold hover:bg-orange-100 transition-colors">
+                        <button type="button" onClick={() => { setFilters({ pais: 'ALL', categoria: 'ALL', pipeline_stage: 'ALL', origen: 'ALL', mensaje: 'ALL', responsable: 'ALL', espacio: 'ALL' }); setGlobalSectorFilter?.('ALL'); clearSelection(); }} className="mt-4 px-4 py-2 bg-orange-50 text-[#FF5A1F] rounded-full text-xs font-bold hover:bg-orange-100 transition-colors">
                           {t('dir_clear_filters')}
                         </button>
                       )}

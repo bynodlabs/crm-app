@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authService } from '../src/services/auth-service.js';
+import { PIPELINE_STAGE_VALUES } from '../src/lead-pipeline.js';
 import { recordService } from '../src/services/record-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -66,11 +67,12 @@ try {
       categoria: 'A',
       canal: 'Automático',
       nota: 'Lead creado manualmente',
+      pipeline_stage: PIPELINE_STAGE_VALUES.NEW,
       propietarioId: user.id,
       responsable: 'Sin Asignar',
       inProspecting: false,
       isArchived: false,
-      historial: [{ fecha: new Date().toISOString(), accion: 'Creado manual en el sistema (Estado: Nuevo)' }],
+      historial: [{ fecha: new Date().toISOString(), accion: `Creado manual en el sistema (${PIPELINE_STAGE_VALUES.NEW})` }],
     },
     user.workspaceId,
   );
@@ -84,7 +86,7 @@ try {
   const prospectingUpdate = await recordService.updateRecord(
     recordId,
     {
-      estadoProspeccion: 'En prospección',
+      pipeline_stage: PIPELINE_STAGE_VALUES.NEW_LEAD,
       inProspecting: true,
       responsable: user.nombre,
       nota: 'Primer contacto listo',
@@ -100,7 +102,7 @@ try {
   const archivedUpdate = await recordService.updateRecord(
     recordId,
     {
-      estadoProspeccion: 'Archivado',
+      pipeline_stage: PIPELINE_STAGE_VALUES.COLD_LEAD,
       inProspecting: true,
       isArchived: true,
       historial: [
@@ -115,7 +117,7 @@ try {
   const restoredUpdate = await recordService.updateRecord(
     recordId,
     {
-      estadoProspeccion: 'En prospección',
+      pipeline_stage: PIPELINE_STAGE_VALUES.NEW_LEAD,
       inProspecting: true,
       isArchived: false,
       historial: [
@@ -130,13 +132,13 @@ try {
   const removedUpdate = await recordService.updateRecord(
     recordId,
     {
-      estadoProspeccion: 'Nuevo',
+      pipeline_stage: PIPELINE_STAGE_VALUES.NEW,
       inProspecting: false,
       isArchived: false,
       mensajeEnviado: false,
       responsable: 'Sin Asignar',
       historial: [
-        { fecha: new Date().toISOString(), accion: 'Retirado del Workspace y devuelto al Directorio (Nuevo)' },
+        { fecha: new Date().toISOString(), accion: `Retirado del Workspace y devuelto al Directorio (${PIPELINE_STAGE_VALUES.NEW})` },
         ...(restoredUpdate.payload.record.historial || []),
       ],
     },
@@ -147,7 +149,7 @@ try {
   const finalList = await recordService.listRecords({}, user.workspaceId);
   const finalRecord = (finalList.items || []).find((record) => record.id === recordId);
   assert(finalRecord, 'El lead final no quedó en el workspace del usuario');
-  assert(finalRecord.estadoProspeccion === 'Nuevo', 'El lead final debería haber regresado a Nuevo');
+  assert(finalRecord.pipeline_stage === PIPELINE_STAGE_VALUES.NEW, 'El lead final debería haber regresado a 🆕 New');
   assert(finalRecord.inProspecting === false, 'El lead final no debería seguir en prospección');
   assert(finalRecord.isArchived === false, 'El lead final no debería seguir archivado');
 
@@ -157,7 +159,7 @@ try {
       {
         workspaceId: user.workspaceId,
         createdLeadId: recordId,
-        finalStatus: finalRecord.estadoProspeccion,
+        finalStatus: finalRecord.pipeline_stage,
         finalResponsible: finalRecord.responsable,
         finalHistoryEntries: (finalRecord.historial || []).length,
       },

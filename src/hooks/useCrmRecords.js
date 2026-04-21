@@ -2,6 +2,15 @@ import { useMemo } from 'react';
 import { api } from '../lib/api';
 import { STORAGE_KEYS } from '../lib/constants';
 import { getLocalISOTime } from '../lib/date';
+import {
+  getLegacyStageIdFromPipelineStage,
+  getLegacyStatusFromPipelineStage,
+  isColdPipelineStage,
+  isLostPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from '../lib/lead-pipeline';
 import { calcularPuntajeLead } from '../lib/lead-utils';
 import { readStorage, writeStorage } from '../lib/storage';
 
@@ -12,9 +21,18 @@ const AGENT_COLORS = [
   'bg-rose-50 text-rose-600 border-rose-200',
 ];
 
-const isLiquidatedStatus = (status) => status === 'Liquidado';
-const countsAsProspecting = (status) => status !== 'Nuevo' && status !== 'Descartado' && !isLiquidatedStatus(status);
-const isArchivedStatus = (status) => status === 'Archivado';
+const applyPipelineStageToRecord = (record, nextPipelineStage) => {
+  const pipelineStage = normalizePipelineStage(nextPipelineStage, record);
+
+  return {
+    ...record,
+    pipeline_stage: pipelineStage,
+    estadoProspeccion: getLegacyStatusFromPipelineStage(pipelineStage, record),
+    stage: getLegacyStageIdFromPipelineStage(pipelineStage, record),
+    inProspecting: isPipelineStageInWorkspace(pipelineStage, record),
+    isArchived: isColdPipelineStage(pipelineStage, record),
+  };
+};
 
 export function useCrmRecords({
   currentUser,
@@ -54,47 +72,50 @@ export function useCrmRecords({
   }, [currentUser, usersDb]);
 
   const displayedRecords = useMemo(() => {
-    const visibleRecords = records.filter((record) => !isLiquidatedStatus(record.estadoProspeccion));
+    const visibleRecords = records.filter((record) => !isLostPipelineStage(record.pipeline_stage, record));
     if (globalSectorFilter === 'ALL') return visibleRecords;
     return visibleRecords.filter((record) => record.sector === globalSectorFilter);
   }, [records, globalSectorFilter]);
 
   const handleUpdateRecord = (updatedRecord) => {
     if (isViewOnly) return;
+    const canonicalRecord = applyPipelineStageToRecord(
+      updatedRecord,
+      updatedRecord?.pipeline_stage || updatedRecord?.stage || updatedRecord?.estadoProspeccion || PIPELINE_STAGE_VALUES.NEW,
+    );
 
-    setRecords((prev) => prev.map((record) => (record.id === updatedRecord.id ? updatedRecord : record)));
-    if (selectedRecord?.id === updatedRecord.id) {
-      setSelectedRecord(updatedRecord);
+    setRecords((prev) => prev.map((record) => (record.id === canonicalRecord.id ? canonicalRecord : record)));
+    if (selectedRecord?.id === canonicalRecord.id) {
+      setSelectedRecord(canonicalRecord);
     }
 
-    api.updateRecord(updatedRecord.id, updatedRecord).catch(() => {
+    api.updateRecord(canonicalRecord.id, canonicalRecord).catch(() => {
       // Keep local fallback if backend is unavailable.
     });
   };
 
-  const handleChangeStatus = (recordId, newStatus) => {
+  const handleChangeStatus = (recordId, nextPipelineStage) => {
     if (isViewOnly) return;
 
     setRecords((prev) =>
       prev.map((record) => {
-        if (record.id !== recordId || record.estadoProspeccion === newStatus) {
+        const normalizedNextStage = normalizePipelineStage(nextPipelineStage, record);
+        if (record.id !== recordId || normalizePipelineStage(record.pipeline_stage, record) === normalizedNextStage) {
           return record;
         }
 
-        return {
-          ...record,
-          estadoProspeccion: newStatus,
-          inProspecting: countsAsProspecting(newStatus),
-          isArchived: isArchivedStatus(newStatus),
-          historial: [{ fecha: getLocalISOTime(), accion: `Estado global actualizado a: ${newStatus}` }, ...(record.historial || [])],
-        };
+        return applyPipelineStageToRecord(
+          {
+            ...record,
+            historial: [{ fecha: getLocalISOTime(), accion: `Pipeline actualizado a: ${normalizedNextStage}` }, ...(record.historial || [])],
+          },
+          normalizedNextStage,
+        );
       }),
     );
 
     api.updateRecord(recordId, {
-      estadoProspeccion: newStatus,
-      inProspecting: countsAsProspecting(newStatus),
-      isArchived: isArchivedStatus(newStatus),
+      pipeline_stage: normalizePipelineStage(nextPipelineStage),
     }).catch(() => {
       // Keep local fallback if backend is unavailable.
     });
@@ -109,28 +130,28 @@ export function useCrmRecords({
           return record;
         }
 
-        return {
-          ...record,
-          isArchived,
-          estadoProspeccion: isArchived
-            ? 'Archivado'
-            : record.estadoProspeccion === 'Archivado'
-              ? 'En prospección'
-              : record.estadoProspeccion,
-          historial: [
-            {
-              fecha: getLocalISOTime(),
-              accion: isArchived ? 'Archivado dentro del Workspace' : 'Restaurado a la mesa activa del Workspace',
-            },
-            ...(record.historial || []),
-          ],
-        };
+        const nextPipelineStage = isArchived
+          ? PIPELINE_STAGE_VALUES.COLD_LEAD
+          : PIPELINE_STAGE_VALUES.NEW_LEAD;
+
+        return applyPipelineStageToRecord(
+          {
+            ...record,
+            historial: [
+              {
+                fecha: getLocalISOTime(),
+                accion: isArchived ? 'Lead movido a Cold Lead desde Workspace' : 'Lead restaurado a la mesa activa del Workspace',
+              },
+              ...(record.historial || []),
+            ],
+          },
+          nextPipelineStage,
+        );
       }),
     );
 
     api.updateRecord(recordId, {
-      isArchived,
-      estadoProspeccion: isArchived ? 'Archivado' : 'En prospección',
+      pipeline_stage: isArchived ? PIPELINE_STAGE_VALUES.COLD_LEAD : PIPELINE_STAGE_VALUES.NEW_LEAD,
     }).catch(() => {
       // Keep local fallback if backend is unavailable.
     });
@@ -145,50 +166,49 @@ export function useCrmRecords({
           return record;
         }
 
-        return {
-          ...record,
-          estadoProspeccion: 'Nuevo',
-          responsable: 'Sin Asignar',
-          inProspecting: false,
-          isArchived: false,
-          historial: [
-            { fecha: getLocalISOTime(), accion: 'Retirado del Workspace y devuelto al Directorio (Nuevo)' },
-            ...(record.historial || []),
-          ],
-        };
+        return applyPipelineStageToRecord(
+          {
+            ...record,
+            responsable: 'Sin Asignar',
+            historial: [
+              { fecha: getLocalISOTime(), accion: 'Lead devuelto al Directorio en etapa 🆕 New' },
+              ...(record.historial || []),
+            ],
+          },
+          PIPELINE_STAGE_VALUES.NEW,
+        );
       }),
     );
 
     api.updateRecord(recordId, {
-      estadoProspeccion: 'Nuevo',
       responsable: 'Sin Asignar',
-      inProspecting: false,
-      isArchived: false,
+      pipeline_stage: PIPELINE_STAGE_VALUES.NEW,
     }).catch(() => {
       // Keep local fallback if backend is unavailable.
     });
   };
 
-  const handleBulkChangeStatus = (recordIds, newStatus) => {
+  const handleBulkChangeStatus = (recordIds, nextPipelineStage) => {
     if (isViewOnly) return;
 
     setRecords((prev) =>
       prev.map((record) => {
-        if (!recordIds.includes(record.id) || record.estadoProspeccion === newStatus) {
+        const normalizedNextStage = normalizePipelineStage(nextPipelineStage, record);
+        if (!recordIds.includes(record.id) || normalizePipelineStage(record.pipeline_stage, record) === normalizedNextStage) {
           return record;
         }
 
-        return {
-          ...record,
-          estadoProspeccion: newStatus,
-          inProspecting: countsAsProspecting(newStatus),
-          isArchived: isArchivedStatus(newStatus),
-          historial: [{ fecha: getLocalISOTime(), accion: `Movido masivamente a: ${newStatus}` }, ...(record.historial || [])],
-        };
+        return applyPipelineStageToRecord(
+          {
+            ...record,
+            historial: [{ fecha: getLocalISOTime(), accion: `Pipeline actualizado masivamente a: ${normalizedNextStage}` }, ...(record.historial || [])],
+          },
+          normalizedNextStage,
+        );
       }),
     );
 
-    api.bulkChangeStatus({ recordIds, newStatus }).catch(() => {
+    api.bulkChangeStatus({ recordIds, newStatus: normalizePipelineStage(nextPipelineStage) }).catch(() => {
       // Keep local fallback if backend is unavailable.
     });
   };
@@ -261,10 +281,7 @@ export function useCrmRecords({
         }
 
         return {
-          ...record,
-          estadoProspeccion: 'Archivado',
-          inProspecting: false,
-          isArchived: true,
+          ...applyPipelineStageToRecord(record, PIPELINE_STAGE_VALUES.COLD_LEAD),
           isShared: true,
           sharedAt: now,
           sharedToUserId: teamMemberId,
@@ -298,9 +315,7 @@ export function useCrmRecords({
           propietarioId: targetUser.id,
           responsable: targetUser.nombre,
           workspaceId: targetUser.workspaceId,
-          inProspecting: false,
-          isArchived: false,
-          estadoProspeccion: 'Nuevo',
+          ...applyPipelineStageToRecord(record, PIPELINE_STAGE_VALUES.NEW),
           historial: [
             { fecha: now, accion: `Lead recibido desde equipo por ${currentUser.nombre}` },
             ...(record.historial || []),
@@ -402,8 +417,7 @@ export function useCrmRecords({
 
     const availableLeads = displayedRecords.filter(
       (record) =>
-        record.estadoProspeccion === 'Nuevo' &&
-        !record.inProspecting &&
+        normalizePipelineStage(record.pipeline_stage, record) === PIPELINE_STAGE_VALUES.NEW &&
         (!record.responsable || record.responsable === 'Sin Asignar' || record.responsable.trim() === ''),
     );
 
@@ -426,24 +440,22 @@ export function useCrmRecords({
           return record;
         }
 
-        return {
-          ...record,
-          inProspecting: true,
-          isArchived: false,
-          estadoProspeccion: 'En prospección',
-          responsable: currentUser.nombre,
-          propietarioId: currentUser.id,
-          historial: [{ fecha: getLocalISOTime(), accion: 'Auto-asignado inteligentemente a Prospección' }, ...(record.historial || [])],
-        };
+        return applyPipelineStageToRecord(
+          {
+            ...record,
+            responsable: currentUser.nombre,
+            propietarioId: currentUser.id,
+            historial: [{ fecha: getLocalISOTime(), accion: 'Auto-asignado inteligentemente a 📤 New Lead' }, ...(record.historial || [])],
+          },
+          PIPELINE_STAGE_VALUES.NEW_LEAD,
+        );
       }),
     );
 
     Promise.all(
       selectedIds.map((recordId) =>
         api.updateRecord(recordId, {
-          inProspecting: true,
-          isArchived: false,
-          estadoProspeccion: 'En prospección',
+          pipeline_stage: PIPELINE_STAGE_VALUES.NEW_LEAD,
           responsable: currentUser.nombre,
           propietarioId: currentUser.id,
         }),

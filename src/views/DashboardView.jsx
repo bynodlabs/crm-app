@@ -4,6 +4,7 @@ import { AvatarInitials } from '../components/AvatarInitials';
 import { RecordCard } from '../components/RecordCard';
 import { getSectorByCode, getSectorLabel, normalizeSectorCode } from '../lib/sector-utils';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
+import { getPipelineStageMeta } from '../lib/lead-pipeline';
 import { translateSector } from '../lib/i18n';
 import { useSectors } from '../hooks/useSectors';
 
@@ -493,6 +494,7 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
             {filteredRecords.slice(0, 10).map((record, i) => {
               const prob = getProbabilidadObj(record);
               const ownerData = myAgents.find((a) => a.nombre === record.responsable) || myAgents[0];
+              const stageMeta = getPipelineStageMeta(record.pipeline_stage, record);
 
               return (
                 <div
@@ -512,7 +514,7 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
                       <p className="text-[11px] text-slate-500 truncate flex items-center gap-1">
-                        Cat. {record.categoria} • {record.estadoProspeccion}
+                        Cat. {record.categoria} • {stageMeta.label}
                       </p>
                       <span className={`text-[9px] px-1.5 py-0.5 rounded border ${ownerData.color} flex items-center gap-1 ml-1 truncate max-w-[80px]`}>
                         <User size={8} /> {ownerData.nombre.split(' ')[0]}

@@ -5,7 +5,14 @@ import { ORIGENES, PAISES } from '../lib/constants';
 import { api } from '../lib/api';
 import { detectCountryCodeFromPhone } from '../lib/country';
 import { getLocalISODate, getLocalISOTime } from '../lib/date';
-import { normalizeLeadStage } from '../lib/lead-pipeline';
+import {
+  getLegacyStageIdFromPipelineStage,
+  getLegacyStatusFromPipelineStage,
+  isColdPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from '../lib/lead-pipeline';
 import { buildLeadIdentity } from '../lib/lead-utils';
 import { normalizeSectorCode } from '../lib/sector-utils';
 import { clearWhatsAppQrCache, getWhatsAppQrCache, setWhatsAppQrCache } from '../lib/whatsapp-cache';
@@ -75,6 +82,17 @@ const downloadCsvFile = (filename, headers, rows) => {
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+};
+
+const buildPipelineFields = (stageValue) => {
+  const pipelineStage = normalizePipelineStage(stageValue);
+  return {
+    pipeline_stage: pipelineStage,
+    estadoProspeccion: getLegacyStatusFromPipelineStage(pipelineStage),
+    stage: getLegacyStageIdFromPipelineStage(pipelineStage),
+    inProspecting: isPipelineStageInWorkspace(pipelineStage),
+    isArchived: isColdPipelineStage(pipelineStage),
+  };
 };
 
 export function AddRecordView({ records, duplicateRecords = [], setRecords, setActiveTab, setDuplicateRecords, t, isViewOnly, currentUser, onCreateRecord, onImportRecords }) {
@@ -408,13 +426,13 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     const normalizedFormSector = getRecordSectorCode(formData.sector);
     const id = `BIG-${getSectorIdSegment(normalizedFormSector)}-${formData.pais}-${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(records.length + 1).padStart(4, '0')}`;
 
-    const finalStatus = formData.sendToProspecting ? 'En prospección' : 'Nuevo';
+    const finalPipelineStage = formData.sendToProspecting ? PIPELINE_STAGE_VALUES.NEW_LEAD : PIPELINE_STAGE_VALUES.NEW;
 
     const newRecord = {
-      ...formData, sector: normalizedFormSector, id, categoria: categoriaCalculada, canal: 'Automático', estadoProspeccion: finalStatus, mensajeEnviado: false, responsable: 'Sin Asignar',
-      stage: normalizeLeadStage('', { estadoProspeccion: finalStatus }),
-      inProspecting: formData.sendToProspecting, isArchived: false, propietarioId: currentUser.id, workspaceId: currentUser.workspaceId,
-      historial: [{ fecha: getLocalISOTime(), accion: `Creado manual en el sistema (Estado: ${finalStatus})` }]
+      ...formData, sector: normalizedFormSector, id, categoria: categoriaCalculada, canal: 'Automático', mensajeEnviado: false, responsable: 'Sin Asignar',
+      propietarioId: currentUser.id, workspaceId: currentUser.workspaceId,
+      ...buildPipelineFields(finalPipelineStage),
+      historial: [{ fecha: getLocalISOTime(), accion: `Creado manual en el sistema (Pipeline: ${finalPipelineStage})` }]
     };
 
     if (onCreateRecord) {
@@ -514,14 +532,11 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                 hasSector: Boolean(matchedSectorId),
               }),
               canal: 'Masivo',
-              estadoProspeccion: 'Nuevo',
-              stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
               mensajeEnviado: false,
               responsable: 'Sin Asignar',
               propietarioId: currentUser.id,
               workspaceId: currentUser.workspaceId,
-              inProspecting: false,
-              isArchived: false,
+              ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW),
               historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente vía Formato de Bloque' }]
             };
             const leadKey = buildLeadIdentity(newRecord);
@@ -615,14 +630,11 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
             id,
             categoria: cat,
             canal: 'Masivo',
-            estadoProspeccion: 'Nuevo',
-            stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
             mensajeEnviado: false,
             responsable: 'Sin Asignar',
             propietarioId: currentUser.id,
             workspaceId: currentUser.workspaceId,
-            inProspecting: false,
-            isArchived: false,
+            ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW),
             historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente vía formato de Tabla' }]
           };
           const leadKey = buildLeadIdentity(newRecord);
@@ -676,7 +688,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         const newRecord = {
           nombre, pais: paisCode, numero, correo, sector, subsector, origen,
           fechaIngreso: getLocalISODate(dateObj), nota, id, categoria: cat, canal: 'Instagram',
-          estadoProspeccion: 'Nuevo', stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }), mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, inProspecting: false, isArchived: false, historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente vía Instagram Scraping' }]
+          mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW), historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente vía Instagram Scraping' }]
         };
         const leadKey = buildLeadIdentity(newRecord);
         const isDup = leadKey && batchSeenKeys.has(leadKey);
@@ -718,14 +730,11 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
             hasSector: Boolean(matchedSectorId),
           }),
           canal: 'Masivo',
-          estadoProspeccion: 'Nuevo',
-          stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
           mensajeEnviado: false,
           responsable: 'Sin Asignar',
           propietarioId: currentUser.id,
           workspaceId: currentUser.workspaceId,
-          inProspecting: false,
-          isArchived: false,
+          ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW),
           historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente desde texto mixto' }],
         };
         const leadKey = buildLeadIdentity(candidateRecord);
@@ -807,7 +816,7 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
           nombre, pais: safePais, numero, correo, sector: safeSector, subsector, origen,
           fechaIngreso: isNaN(dateObj.getTime()) ? getLocalISODate() : fechaIngreso,
           nota, id, categoria: cat, canal: 'Masivo',
-          estadoProspeccion: 'Nuevo', stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }), mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, inProspecting: false, isArchived: false, historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente (Formato Genérico)' }]
+          mensajeEnviado: false, responsable: 'Sin Asignar', propietarioId: currentUser.id, workspaceId: currentUser.workspaceId, ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW), historial: [{ fecha: getLocalISOTime(dateObj), accion: 'Importado masivamente (Formato Genérico)' }]
         };
         const leadKey = buildLeadIdentity(newRecord);
         const normalizedPhone = numero ? numero.replace(/\D/g, '') : '';
@@ -1431,14 +1440,11 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         id,
         categoria: 'C',
         canal: 'WhatsApp',
-        estadoProspeccion: 'Nuevo',
-        stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
         mensajeEnviado: false,
         responsable: 'Sin Asignar',
         propietarioId: currentUser.id,
         workspaceId: currentUser.workspaceId,
-        inProspecting: false,
-        isArchived: false,
+        ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW),
       };
 
       const leadKey = buildLeadIdentity(candidateRecord);
@@ -1526,14 +1532,11 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
         id,
         categoria: 'C',
         canal: 'WhatsApp',
-        estadoProspeccion: 'Nuevo',
-        stage: normalizeLeadStage('', { estadoProspeccion: 'Nuevo' }),
         mensajeEnviado: false,
         responsable: 'Sin Asignar',
         propietarioId: currentUser.id,
         workspaceId: currentUser.workspaceId,
-        inProspecting: false,
-        isArchived: false,
+        ...buildPipelineFields(PIPELINE_STAGE_VALUES.NEW),
       };
       const leadKey = buildLeadIdentity(candidateRecord);
       const existsInBatch = (leadKey && batchSeenKeys.has(leadKey)) || batchSeenKeys.has(phoneKey);

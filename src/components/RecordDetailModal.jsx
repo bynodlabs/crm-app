@@ -2,13 +2,19 @@ import { useEffect, useMemo, useState } from 'react';
 import { Mail, Phone, Save, User, X } from 'lucide-react';
 import { detectCountryCodeFromPhone, getCountryMetaForRecord } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
-import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
+import {
+  getLegacyStageIdFromPipelineStage,
+  getLegacyStatusFromPipelineStage,
+  getPipelineStageMeta,
+  getPipelineStageOptions,
+  isColdPipelineStage,
+  isPipelineStageInWorkspace,
+  normalizePipelineStage,
+  PIPELINE_STAGE_VALUES,
+} from '../lib/lead-pipeline';
 import { GENERAL_SECTOR_ID, getSectorLabel, normalizeSectorCode } from '../lib/sector-utils';
 import { LANG_LOCALES } from '../lib/i18n';
 import { useSectors } from '../hooks/useSectors';
-
-const countsAsProspecting = (status) => status !== 'Nuevo' && status !== 'Descartado' && status !== 'Liquidado';
-const isArchivedStatus = (status) => status === 'Archivado';
 
 export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, language = 'es' }) {
   const { sectors, activeSectors } = useSectors({ records: record ? [record] : [] });
@@ -24,31 +30,30 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
     [draft],
   );
   const pipelineOptions = useMemo(() => getPipelineStageOptions(), []);
-  const activeStage = useMemo(() => getPipelineStageMeta(draft?.stage, draft), [draft]);
+  const activeStage = useMemo(() => getPipelineStageMeta(draft?.pipeline_stage, draft), [draft]);
   const normalizedDraftSector = useMemo(() => normalizeSectorCode(draft?.sector), [draft?.sector]);
 
   if (!record || !draft) return null;
 
   const handleSave = () => {
+    const normalizedPipelineStage = normalizePipelineStage(
+      draft?.pipeline_stage || draft?.stage || draft?.estadoProspeccion || PIPELINE_STAGE_VALUES.NEW,
+      draft,
+    );
     const nextRecord = {
       ...record,
       ...draft,
       sector: normalizeSectorCode(draft?.sector),
+      pipeline_stage: normalizedPipelineStage,
+      estadoProspeccion: getLegacyStatusFromPipelineStage(normalizedPipelineStage, draft),
+      stage: getLegacyStageIdFromPipelineStage(normalizedPipelineStage, draft),
+      inProspecting: isPipelineStageInWorkspace(normalizedPipelineStage, draft),
+      isArchived: isColdPipelineStage(normalizedPipelineStage, draft),
     };
 
-    if ((draft.estadoProspeccion || 'Nuevo') !== (record.estadoProspeccion || 'Nuevo')) {
-      nextRecord.inProspecting = countsAsProspecting(draft.estadoProspeccion);
-      nextRecord.isArchived = isArchivedStatus(draft.estadoProspeccion);
+    if (normalizePipelineStage(draft?.pipeline_stage, draft) !== normalizePipelineStage(record?.pipeline_stage, record)) {
       nextRecord.historial = [
-        { fecha: getLocalISOTime(), accion: `Estado global actualizado a: ${draft.estadoProspeccion}` },
-        ...(draft.historial || record.historial || []),
-      ];
-    }
-
-    if (normalizeLeadStage(draft.stage, draft) !== normalizeLeadStage(record.stage, record)) {
-      nextRecord.stage = normalizeLeadStage(draft.stage, draft);
-      nextRecord.historial = [
-        { fecha: getLocalISOTime(), accion: `Pipeline actualizado a: ${getPipelineStageMeta(draft.stage, draft).label}` },
+        { fecha: getLocalISOTime(), accion: `Pipeline actualizado a: ${getPipelineStageMeta(normalizedPipelineStage, draft).label}` },
         ...(nextRecord.historial || draft.historial || record.historial || []),
       ];
     }
@@ -67,18 +72,18 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
   };
 
   const handleStageChange = (nextStage) => {
-    const normalizedStage = normalizeLeadStage(nextStage, draft);
-    const currentStage = normalizeLeadStage(record.stage, record);
+    const normalizedStage = normalizePipelineStage(nextStage, draft);
+    const currentStage = normalizePipelineStage(record.pipeline_stage, record);
 
     if (normalizedStage === currentStage) {
       setDraft((prev) => ({
         ...prev,
-        stage: normalizedStage,
+        pipeline_stage: normalizedStage,
       }));
       return;
     }
 
-    const stageLabel = getPipelineStageMeta(normalizedStage, { ...record, ...draft, stage: normalizedStage }).label;
+    const stageLabel = getPipelineStageMeta(normalizedStage, { ...record, ...draft, pipeline_stage: normalizedStage }).label;
     const nextHistory = [
       { fecha: getLocalISOTime(), accion: `Pipeline actualizado a: ${stageLabel}` },
       ...(draft.historial || record.historial || []),
@@ -86,13 +91,17 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
 
     setDraft((prev) => ({
       ...prev,
-      stage: normalizedStage,
+      pipeline_stage: normalizedStage,
       historial: nextHistory,
     }));
 
     onUpdate({
       ...record,
-      stage: normalizedStage,
+      pipeline_stage: normalizedStage,
+      estadoProspeccion: getLegacyStatusFromPipelineStage(normalizedStage, record),
+      stage: getLegacyStageIdFromPipelineStage(normalizedStage, record),
+      inProspecting: isPipelineStageInWorkspace(normalizedStage, record),
+      isArchived: isColdPipelineStage(normalizedStage, record),
       historial: nextHistory,
     });
   };
@@ -188,7 +197,7 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
                           : 'border-slate-200 bg-white text-slate-500 hover:border-orange-200 hover:text-[#FF5A1F]'
                       }`}
                     >
-                      {stage.icon} {stage.label}
+                      {stage.icon} {stage.shortLabel}
                     </button>
                   );
                 })}

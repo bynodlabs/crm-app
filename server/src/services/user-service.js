@@ -1,8 +1,8 @@
 import { readDb, writeDb } from '../db.js';
+import { isLostPipelineStage, isPipelineStageWorked } from '../lead-pipeline.js';
 import { hashPassword, sanitizeUser, verifyPassword } from '../utils.js';
 
-const isLiquidatedLead = (record) => record?.estadoProspeccion === 'Liquidado';
-const isDiscardedLead = (record) => record?.estadoProspeccion === 'Descartado';
+const isLostLead = (record) => isLostPipelineStage(record?.pipeline_stage, record);
 const normalized = (value = '') => String(value || '').trim().toLowerCase();
 const getLatestRealContactEntry = (record) => {
   const contactLogs = (record?.historial || []).filter((entry) => {
@@ -171,7 +171,7 @@ export const userService = {
 
     const teamReceivedRecords = (db.records || []).filter((record) => {
       if (!record?.sourceRecordId || !sharedSourceIds.has(record.sourceRecordId)) return false;
-      if (isDiscardedLead(record) || isLiquidatedLead(record)) return false;
+      if (isLostLead(record)) return false;
       return (
         (record.propietarioId && memberIds.has(record.propietarioId)) ||
         (record.workspaceId && memberWorkspaces.has(record.workspaceId)) ||
@@ -182,7 +182,7 @@ export const userService = {
     const isWorkedLead = (record) =>
       Boolean(record?.mensajeEnviado) ||
       Boolean(getLatestRealContactEntry(record)) ||
-      (record?.estadoProspeccion !== 'Nuevo' && record?.estadoProspeccion !== 'Archivado');
+      isPipelineStageWorked(record?.pipeline_stage, record);
 
     const ranking = teamMembers
       .map((member) => {
