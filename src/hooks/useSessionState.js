@@ -219,23 +219,6 @@ export function useSessionState() {
       };
     }
 
-    if (usersDb.find((candidate) => normalizeEmail(candidate.email) === normalizedEmail)) {
-      return { ok: false, reason: 'email_exists' };
-    }
-
-    if (safeReferralCode) {
-      const referralExists = safeReferralCode === 'ANA-9X2'
-        || usersDb.some((candidate) => String(candidate.codigoPropio || '').trim().toUpperCase() === safeReferralCode);
-
-      if (!referralExists) {
-        return {
-          ok: false,
-          reason: 'invalid_data',
-          message: 'El código de equipo no existe.',
-        };
-      }
-    }
-
     const nextUserId = createUniqueLocalUserId([...usersDb.map((candidate) => candidate.id), ...RESERVED_USER_IDS]);
     const nextWorkspaceId = createUniqueLocalWorkspaceId([...usersDb.map((candidate) => candidate.workspaceId), ...RESERVED_WORKSPACE_IDS], nextUserId);
     const nextCodigoPropio = createUniqueLocalUserCode(safeName, [...usersDb.map((candidate) => candidate.codigoPropio), ...RESERVED_USER_CODES]);
@@ -293,6 +276,27 @@ export function useSessionState() {
           reason: 'register_failed',
           message: error?.payload?.error || 'No se pudo completar el registro.',
         };
+      }
+
+      if (usersDb.find((candidate) => normalizeEmail(candidate.email) === normalizedEmail)) {
+        return {
+          ok: false,
+          reason: 'email_exists',
+          message: 'El correo ya está registrado en este navegador.',
+        };
+      }
+
+      if (safeReferralCode) {
+        const referralExists = safeReferralCode === 'ANA-9X2'
+          || usersDb.some((candidate) => String(candidate.codigoPropio || '').trim().toUpperCase() === safeReferralCode);
+
+        if (!referralExists) {
+          return {
+            ok: false,
+            reason: 'invalid_data',
+            message: 'El código de equipo no existe.',
+          };
+        }
       }
 
       setAdminReturnData(null);
