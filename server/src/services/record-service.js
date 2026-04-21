@@ -457,7 +457,7 @@ export const recordService = {
     const targetUser = db.users.find((candidate) => {
       if (candidate.id !== targetUserId) return false;
       if (currentUser.rol === 'admin') {
-        return candidate.email !== 'admin@bigdata.com';
+        return candidate.email !== 'bynodlabs@gmail.com';
       }
       return candidate.referidoPor === currentUser.codigoPropio;
     });

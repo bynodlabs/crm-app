@@ -11,7 +11,7 @@ export const config = {
   authRateLimit: toPositiveInt(process.env.AUTH_RATE_LIMIT, 10),
   authRateWindowMs: toPositiveInt(process.env.AUTH_RATE_WINDOW_MS, 1000 * 60 * 15),
   corsOrigin: process.env.CORS_ORIGIN || '',
-  adminEmail: process.env.ADMIN_EMAIL || 'admin@bigdata.com',
+  adminEmail: process.env.ADMIN_EMAIL || 'bynodlabs@gmail.com',
   adminPassword: process.env.ADMIN_PASSWORD || 'bigdata@',
   mysqlHost: process.env.MYSQL_HOST || process.env.DB_HOST || '127.0.0.1',
   mysqlPort: toPositiveInt(process.env.MYSQL_PORT || process.env.DB_PORT, 3306),

@@ -25,6 +25,7 @@ const buildAdminUser = (profile = {}) => ({
   workspaceId: 'WS-U1',
   rol: 'admin',
   avatarUrl: typeof profile.avatarUrl === 'string' ? profile.avatarUrl.trim() : '',
+  autoCreateWhatsappLeads: Boolean(profile.autoCreateWhatsappLeads),
 });
 
 const createSession = (userId, role = 'user', extra = {}) => ({

@@ -6,7 +6,8 @@ USE `crm_new_2026`;
 
 CREATE TABLE IF NOT EXISTS `adminProfile` (
   `nombre` VARCHAR(255) NOT NULL,
-  `avatarUrl` LONGTEXT NULL
+  `avatarUrl` LONGTEXT NULL,
+  `autoCreateWhatsappLeads` TINYINT(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `users` (
@@ -20,6 +21,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `workspaceId` VARCHAR(64) NOT NULL,
   `role` VARCHAR(32) NOT NULL,
   `avatarUrl` LONGTEXT NULL,
+  `autoCreateWhatsappLeads` TINYINT(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_users_email` (`email`),
   UNIQUE KEY `uq_users_codigoPropio` (`codigoPropio`),
@@ -44,6 +46,97 @@ CREATE TABLE IF NOT EXISTS `sectors` (
   UNIQUE KEY `uq_sectors_workspace_code` (`workspaceId`, `code`),
   KEY `idx_sectors_workspace_active` (`workspaceId`, `isActive`),
   KEY `idx_sectors_workspace_sort` (`workspaceId`, `sortOrder`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `wa_channels` (
+  `id` VARCHAR(64) NOT NULL,
+  `workspaceId` VARCHAR(64) NOT NULL,
+  `channelKey` VARCHAR(128) NOT NULL,
+  `channelType` VARCHAR(32) NOT NULL DEFAULT 'whatsapp',
+  `phoneNumber` VARCHAR(64) NOT NULL DEFAULT '',
+  `profileName` VARCHAR(255) NOT NULL DEFAULT '',
+  `status` VARCHAR(32) NOT NULL DEFAULT 'disconnected',
+  `lastConnectedAt` DATETIME NULL,
+  `lastDisconnectedAt` DATETIME NULL,
+  `createdAt` DATETIME NOT NULL,
+  `updatedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_wa_channels_workspace_key` (`workspaceId`, `channelKey`),
+  KEY `idx_wa_channels_workspace_status` (`workspaceId`, `status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `lead_conversations` (
+  `id` VARCHAR(64) NOT NULL,
+  `workspaceId` VARCHAR(64) NOT NULL,
+  `leadId` VARCHAR(64) NULL,
+  `channelId` VARCHAR(64) NULL,
+  `chatJid` VARCHAR(128) NOT NULL,
+  `phoneNumber` VARCHAR(64) NOT NULL DEFAULT '',
+  `displayName` VARCHAR(255) NOT NULL DEFAULT '',
+  `avatarUrl` TEXT NULL,
+  `status` VARCHAR(32) NOT NULL DEFAULT 'active',
+  `lastMessageText` TEXT NULL,
+  `lastMessageDirection` VARCHAR(16) NOT NULL DEFAULT 'in',
+  `lastMessageAt` DATETIME NULL,
+  `lastInboundAt` DATETIME NULL,
+  `lastOutboundAt` DATETIME NULL,
+  `lastSummaryAt` DATETIME NULL,
+  `createdAt` DATETIME NOT NULL,
+  `updatedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_lead_conversations_workspace_chat` (`workspaceId`, `chatJid`),
+  KEY `idx_lead_conversations_workspace_lead` (`workspaceId`, `leadId`),
+  KEY `idx_lead_conversations_workspace_last` (`workspaceId`, `lastMessageAt`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `lead_conversation_messages` (
+  `id` VARCHAR(64) NOT NULL,
+  `conversationId` VARCHAR(64) NOT NULL,
+  `workspaceId` VARCHAR(64) NOT NULL,
+  `leadId` VARCHAR(64) NULL,
+  `channelId` VARCHAR(64) NULL,
+  `chatJid` VARCHAR(128) NOT NULL,
+  `waMessageId` VARCHAR(128) NOT NULL,
+  `direction` VARCHAR(16) NOT NULL,
+  `messageType` VARCHAR(32) NOT NULL DEFAULT 'text',
+  `text` TEXT NULL,
+  `caption` TEXT NULL,
+  `mimeType` VARCHAR(255) NOT NULL DEFAULT '',
+  `fileName` VARCHAR(255) NOT NULL DEFAULT '',
+  `status` VARCHAR(32) NOT NULL DEFAULT '',
+  `hasMedia` TINYINT(1) NOT NULL DEFAULT 0,
+  `fromMe` TINYINT(1) NOT NULL DEFAULT 0,
+  `pushName` VARCHAR(255) NOT NULL DEFAULT '',
+  `avatarUrl` TEXT NULL,
+  `contactDisplayName` VARCHAR(255) NOT NULL DEFAULT '',
+  `contactPhoneNumber` VARCHAR(64) NOT NULL DEFAULT '',
+  `contactVcard` TEXT NULL,
+  `quotedMessageId` VARCHAR(128) NOT NULL DEFAULT '',
+  `quotedMessageText` TEXT NULL,
+  `deletedForEveryone` TINYINT(1) NOT NULL DEFAULT 0,
+  `sentAt` DATETIME NOT NULL,
+  `createdAt` DATETIME NOT NULL,
+  `updatedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_lead_conversation_messages_workspace_chat_message` (`workspaceId`, `chatJid`, `waMessageId`),
+  KEY `idx_lead_conversation_messages_conversation_sent` (`conversationId`, `sentAt`),
+  KEY `idx_lead_conversation_messages_workspace_lead` (`workspaceId`, `leadId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `lead_conversation_summaries` (
+  `id` VARCHAR(64) NOT NULL,
+  `conversationId` VARCHAR(64) NOT NULL,
+  `workspaceId` VARCHAR(64) NOT NULL,
+  `leadId` VARCHAR(64) NULL,
+  `summary` TEXT NOT NULL,
+  `messageCount` INT NOT NULL DEFAULT 0,
+  `fromMessageAt` DATETIME NULL,
+  `toMessageAt` DATETIME NULL,
+  `createdAt` DATETIME NOT NULL,
+  `updatedAt` DATETIME NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_lead_conversation_summaries_conversation` (`conversationId`, `updatedAt`),
+  KEY `idx_lead_conversation_summaries_workspace_lead` (`workspaceId`, `leadId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `records` (

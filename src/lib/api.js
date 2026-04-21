@@ -129,6 +129,13 @@ export const api = {
     });
   },
 
+  updateSector(sectorId, payload) {
+    return apiRequest(`/sectors/${sectorId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  },
+
   deleteSector(sectorId) {
     return apiRequest(`/sectors/${sectorId}`, {
       method: 'DELETE',
@@ -163,6 +170,10 @@ export const api = {
 
   getWhatsAppChatMessages(contactId) {
     return apiRequest(`/wa/chats/${encodeURIComponent(contactId)}/messages`);
+  },
+
+  getWhatsAppChatSummary(contactId) {
+    return apiRequest(`/wa/chats/${encodeURIComponent(contactId)}/summary`);
   },
 
   sendWhatsAppChatMessage(contactId, payload) {

@@ -1,10 +1,10 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, Search, Sliders, Trash2, User, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, MessageCircle, Search, Sliders, Trash2, User, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { ESTADOS_PROSPECCION, ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
 import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
-import { getSectorByCode } from '../lib/sector-utils';
+import { getSectorByCode, getSectorLabel, normalizeSectorCode } from '../lib/sector-utils';
 import { useSectors } from '../hooks/useSectors';
 
 const DIRECTORY_PAGE_SIZE = 100;
@@ -14,24 +14,58 @@ const isArchivedLead = (record) => (record.estadoProspeccion === 'Archivado' || 
 const countsAsProspecting = (record) => record.estadoProspeccion !== 'Nuevo' && !isDiscardedLead(record) && !isLiquidatedLead(record);
 const normalizePhoneDigits = (value = '') => String(value || '').replace(/\D/g, '');
 const CSV_FIELD_OPTIONS = [
-  { key: 'id', label: 'ID', getValue: (record) => record.id || '' },
   { key: 'nombre', label: 'Nombre', getValue: (record) => record.nombre || '' },
   { key: 'pais', label: 'Pais', getValue: (record) => record.pais || '' },
-  { key: 'numero', label: 'Telefono', getValue: (record) => record.numero || '' },
+  { key: 'numero', label: 'WhatsApp', getValue: (record) => record.numero || '' },
   { key: 'correo', label: 'Correo', getValue: (record) => record.correo || record.email || '' },
-  { key: 'sector', label: 'Sector', getValue: (record, sectorNameById) => sectorNameById[record.sector] || record.sector || '' },
+  { key: 'sector', label: 'Sector', getValue: (record, getSectorName) => getSectorName(record.sector) || '' },
   { key: 'subsector', label: 'Subsector', getValue: (record) => record.subsector || '' },
-  { key: 'origen', label: 'Origen', getValue: (record) => record.origen || '' },
-  { key: 'fechaIngreso', label: 'FechaIngreso', getValue: (record) => record.fechaIngreso || '' },
   { key: 'categoria', label: 'Categoria', getValue: (record) => record.categoria || '' },
-  { key: 'estadoProspeccion', label: 'Estado', getValue: (record) => record.estadoProspeccion || '' },
-  { key: 'stage', label: 'Pipeline', getValue: (record) => getPipelineStageMeta(record.stage, record).label },
-  { key: 'responsable', label: 'Responsable', getValue: (record) => record.responsable || '' },
-  { key: 'workspaceId', label: 'WorkspaceId', getValue: (record) => record.workspaceId || '' },
-  { key: 'mensajeEnviado', label: 'MensajeEnviado', getValue: (record) => (record.mensajeEnviado ? 'Sí' : 'No') },
   { key: 'notes', label: 'Notas', getValue: (record) => record.notes || record.nota || '' },
 ];
-const DEFAULT_CSV_FIELD_KEYS = CSV_FIELD_OPTIONS.map((field) => field.key);
+const DEFAULT_CSV_FIELD_KEYS = ['numero'];
+const CSV_ACTIVE_FIELD_STYLES = {
+  numero: {
+    chip: 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-cyan-50 text-emerald-800 shadow-[0_16px_30px_-24px_rgba(16,185,129,0.45)] hover:from-emerald-100 hover:to-cyan-100',
+    icon: 'bg-emerald-500 text-white',
+    remove: 'text-emerald-500',
+  },
+  nombre: {
+    chip: 'border-fuchsia-200 bg-gradient-to-r from-fuchsia-50 to-pink-50 text-fuchsia-800 shadow-[0_16px_30px_-24px_rgba(217,70,239,0.42)] hover:from-fuchsia-100 hover:to-pink-100',
+    icon: 'bg-fuchsia-500 text-white',
+    remove: 'text-fuchsia-500',
+  },
+  pais: {
+    chip: 'border-sky-200 bg-gradient-to-r from-sky-50 to-blue-50 text-sky-800 shadow-[0_16px_30px_-24px_rgba(14,165,233,0.42)] hover:from-sky-100 hover:to-blue-100',
+    icon: 'bg-sky-500 text-white',
+    remove: 'text-sky-500',
+  },
+  correo: {
+    chip: 'border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50 text-violet-800 shadow-[0_16px_30px_-24px_rgba(139,92,246,0.42)] hover:from-violet-100 hover:to-purple-100',
+    icon: 'bg-violet-500 text-white',
+    remove: 'text-violet-500',
+  },
+  sector: {
+    chip: 'border-orange-200 bg-gradient-to-r from-orange-50 to-amber-50 text-orange-800 shadow-[0_16px_30px_-24px_rgba(249,115,22,0.42)] hover:from-orange-100 hover:to-amber-100',
+    icon: 'bg-orange-500 text-white',
+    remove: 'text-orange-500',
+  },
+  subsector: {
+    chip: 'border-rose-200 bg-gradient-to-r from-rose-50 to-pink-50 text-rose-800 shadow-[0_16px_30px_-24px_rgba(244,63,94,0.42)] hover:from-rose-100 hover:to-pink-100',
+    icon: 'bg-rose-500 text-white',
+    remove: 'text-rose-500',
+  },
+  categoria: {
+    chip: 'border-cyan-200 bg-gradient-to-r from-cyan-50 to-teal-50 text-cyan-800 shadow-[0_16px_30px_-24px_rgba(6,182,212,0.42)] hover:from-cyan-100 hover:to-teal-100',
+    icon: 'bg-cyan-500 text-white',
+    remove: 'text-cyan-500',
+  },
+  notes: {
+    chip: 'border-pink-200 bg-gradient-to-r from-pink-50 to-rose-50 text-pink-800 shadow-[0_16px_30px_-24px_rgba(236,72,153,0.42)] hover:from-pink-100 hover:to-rose-100',
+    icon: 'bg-pink-500 text-white',
+    remove: 'text-pink-500',
+  },
+};
 
 const escapeCsvCell = (value) => {
   const stringValue = value == null ? '' : String(value);
@@ -59,8 +93,8 @@ const downloadCsvFile = (filename, headers, rows) => {
   URL.revokeObjectURL(url);
 };
 
-export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
-  const { sectors, activeSectors } = useSectors();
+export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversation, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
+  const { sectors, visibleSectors } = useSectors({ records });
   const [showFilters, setShowFilters] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
@@ -86,7 +120,10 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
   const [archiveSubtab, setArchiveSubtab] = useState('archivados');
   const [selectedCsvFields, setSelectedCsvFields] = useState(DEFAULT_CSV_FIELD_KEYS);
   const deferredSearchTerm = useDeferredValue(searchTerm);
-  const sectorNameById = useMemo(() => Object.fromEntries(sectors.map((sector) => [sector.id, sector.nombre])), [sectors]);
+  const getSectorName = useMemo(
+    () => (value) => getSectorLabel('es', value, sectors),
+    [sectors],
+  );
   const selectedSectorOption = useMemo(() => getSectorByCode(sectors, globalSectorFilter), [globalSectorFilter, sectors]);
   const pipelineOptions = useMemo(() => getPipelineStageOptions(), []);
   const sharedSourceIds = useMemo(
@@ -128,7 +165,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
       const recordName = String(record?.nombre || '').toLowerCase();
       const recordId = String(record?.id || '').toLowerCase();
       const recordEmail = String(record?.correo || '').toLowerCase();
-      const sectorName = String(sectorNameById[record?.sector] || record?.sector || '').toLowerCase();
+      const sectorName = String(getSectorName(record?.sector) || '').toLowerCase();
       const recordPhoneDigits = normalizePhoneDigits(record.numero);
       const matchesSearch =
         recordName.includes(searchLower) ||
@@ -141,7 +178,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
       const matchesCategoria = filters.categoria === 'ALL' || record.categoria === filters.categoria;
       const matchesEstado = filters.estado === 'ALL' || (record.estadoProspeccion || 'Nuevo') === filters.estado;
       const matchesStage = filters.stage === 'ALL' || normalizeLeadStage(record.stage, record) === filters.stage;
-      const matchesSector = globalSectorFilter === 'ALL' || record.sector === globalSectorFilter;
+      const matchesSector = globalSectorFilter === 'ALL' || normalizeSectorCode(record.sector) === globalSectorFilter;
       const matchesOrigen = filters.origen === 'ALL' || record.origen === filters.origen;
       const matchesMensaje = filters.mensaje === 'ALL' || (filters.mensaje === 'ENVIADO' ? record.mensajeEnviado : !record.mensajeEnviado);
       const matchesResponsable = filters.responsable === 'ALL' || (record.responsable || 'Sin Asignar') === filters.responsable;
@@ -150,7 +187,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
 
       return matchesSearch && matchesPais && matchesCategoria && matchesEstado && matchesStage && matchesSector && matchesOrigen && matchesMensaje && matchesResponsable && matchesEspacio;
     });
-  }, [deferredSearchTerm, filters, globalSectorFilter, sectorNameById, tabScopedRecords]);
+  }, [deferredSearchTerm, filters, getSectorName, globalSectorFilter, tabScopedRecords]);
   const displayRecords = filteredRecords;
 
   const localTotalPages = Math.max(1, Math.ceil(displayRecords.length / DIRECTORY_PAGE_SIZE));
@@ -201,6 +238,10 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
     () => CSV_FIELD_OPTIONS.filter((field) => selectedCsvFields.includes(field.key)),
     [selectedCsvFields],
   );
+  const inactiveCsvFields = useMemo(
+    () => CSV_FIELD_OPTIONS.filter((field) => !selectedCsvFields.includes(field.key)),
+    [selectedCsvFields],
+  );
 
   const handleDownloadCsv = (mode) => {
     const sourceRecords =
@@ -215,21 +256,25 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
     const safeTabName = currentTabLabel.toLowerCase().replace(/\s+/g, '-');
     const dateStamp = new Date().toISOString().slice(0, 10);
     const headers = activeCsvFields.map((field) => field.label);
-    const rows = sourceRecords.map((record) => activeCsvFields.map((field) => field.getValue(record, sectorNameById)));
+    const rows = sourceRecords.map((record) => activeCsvFields.map((field) => field.getValue(record, getSectorName)));
     downloadCsvFile(`directorio-${safeTabName}-${dateStamp}.csv`, headers, rows);
     setShowExportPanel(false);
     setConfirmCsvDownload(null);
   };
 
   const handleToggleCsvField = (fieldKey) => {
-    setSelectedCsvFields((current) =>
-      current.includes(fieldKey)
-        ? current.filter((key) => key !== fieldKey)
-        : [...current, fieldKey],
-    );
+    setSelectedCsvFields((current) => {
+      if (current.includes(fieldKey)) {
+        return current.length === 1 ? current : current.filter((key) => key !== fieldKey);
+      }
+      const next = new Set([...current, fieldKey]);
+      return CSV_FIELD_OPTIONS
+        .map((field) => field.key)
+        .filter((key) => next.has(key));
+    });
   };
 
-  const handleSelectAllCsvFields = () => setSelectedCsvFields(DEFAULT_CSV_FIELD_KEYS);
+  const handleSelectAllCsvFields = () => setSelectedCsvFields(CSV_FIELD_OPTIONS.map((field) => field.key));
 
   const handleToggleSelectAll = () => {
     if (!canBulkSelect) return;
@@ -535,9 +580,9 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 pl-2">{t('dir_flt_sector')}</label>
               <select value={globalSectorFilter} onChange={(e) => { const nextSector = e.target.value; setGlobalSectorFilter?.(nextSector); setCurrentPage(1); clearSelection(); }} className="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:ring-2 focus:ring-orange-100 outline-none appearance-none">
                 <option value="ALL">{t('dir_opt_all')}</option>
-                {activeSectors.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                {!activeSectors.some((sector) => sector.id === globalSectorFilter) && selectedSectorOption ? (
-                  <option value={selectedSectorOption.id}>{selectedSectorOption.nombre}</option>
+                {visibleSectors.map((s) => <option key={s.id} value={s.id}>{getSectorName(s.id)}</option>)}
+                {!visibleSectors.some((sector) => sector.id === globalSectorFilter) && selectedSectorOption ? (
+                  <option value={selectedSectorOption.id}>{getSectorName(selectedSectorOption.id)}</option>
                 ) : null}
               </select>
             </div>
@@ -584,11 +629,10 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
             <div className="absolute -left-12 bottom-0 h-28 w-28 rounded-full bg-orange-200/35 blur-3xl"></div>
             <div className="relative flex items-center justify-between gap-4 border-b border-white/70 px-5 py-4 sm:px-6">
               <div>
-                <div className="mb-2 inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700">
-                  Exportación CSV
-                </div>
-                <h3 className="text-xl font-black text-slate-900">Descargar {currentTabLabel}</h3>
-                <p className="mt-1 text-sm text-slate-500">Elige qué columnas quieres incluir antes de generar el archivo.</p>
+                <h3 className="text-[1.35rem] text-slate-900 sm:text-[1.55rem]">
+                  <span className="font-normal">Exportar </span>
+                  <span className="font-black">contactos</span>
+                </h3>
               </div>
               <button
                 type="button"
@@ -599,9 +643,9 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
               </button>
             </div>
 
-            <div className="relative max-h-[70vh] overflow-y-auto px-5 py-5 sm:px-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-400">Columnas del archivo</p>
+            <div className="relative max-h-[70vh] overflow-y-auto px-5 pb-5 pt-3 sm:px-6">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-bold uppercase tracking-normal text-slate-400">Columnas seleccionadas</p>
                 <button
                   type="button"
                   onClick={handleSelectAllCsvFields}
@@ -611,41 +655,51 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                 </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {CSV_FIELD_OPTIONS.map((field) => {
-                  const checked = selectedCsvFields.includes(field.key);
-                  return (
+              <div className="flex flex-wrap gap-3">
+                {activeCsvFields.map((field) => (
+                  (() => {
+                    const style = CSV_ACTIVE_FIELD_STYLES[field.key] || CSV_ACTIVE_FIELD_STYLES.numero;
+                    return (
+                  <button
+                    key={field.key}
+                    type="button"
+                    onClick={() => handleToggleCsvField(field.key)}
+                    disabled={activeCsvFields.length === 1}
+                    className={`inline-flex items-center rounded-full border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${style.chip}`}
+                    aria-label={`Quitar ${field.label}`}
+                  >
+                    <span className={`mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full shadow-sm ${style.icon}`}>
+                      <Check size={12} strokeWidth={3} />
+                    </span>
+                    <span>{field.label}</span>
+                    <span className={`ml-2 text-base leading-none ${style.remove}`}>
+                      <X size={14} />
+                    </span>
+                  </button>
+                    );
+                  })()
+                ))}
+              </div>
+
+              <div className="mt-8 border-t border-slate-200/70 pt-6">
+                <div className="flex flex-wrap gap-3">
+                  {inactiveCsvFields.map((field) => (
                     <button
                       key={field.key}
                       type="button"
                       onClick={() => handleToggleCsvField(field.key)}
-                      className={`group flex items-center justify-between rounded-[1.5rem] border px-4 py-3 text-left text-sm font-semibold transition-all ${
-                        checked
-                          ? 'border-emerald-200 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(209,250,229,0.8))] text-emerald-800 shadow-[0_14px_30px_-24px_rgba(16,185,129,0.55)]'
-                          : 'border-slate-200 bg-white/80 text-slate-600 hover:bg-white hover:border-slate-300'
-                      }`}
+                      className="inline-flex items-center rounded-full border border-slate-200 bg-white/90 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
                     >
-                      <span>{field.label}</span>
-                      <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-[10px] transition-all ${checked ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-slate-300 bg-white text-slate-400 group-hover:border-slate-400'}`}>
-                        {checked ? <Check size={12} strokeWidth={3} /> : ''}
-                      </span>
+                      <span className="mr-2 text-base leading-none text-slate-400">+</span>
+                      {field.label}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
             </div>
 
             <div className="border-t border-white/70 bg-white/70 px-5 py-4 sm:px-6">
-              <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <button
-                  type="button"
-                  onClick={() => requestCsvDownload('visible')}
-                  disabled={visibleRecords.length === 0 || activeCsvFields.length === 0}
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <span>Visibles</span>
-                  <span className="text-xs text-slate-400">{visibleRecords.length}</span>
-                </button>
+              <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-[1.35fr_0.85fr]">
                 <button
                   type="button"
                   onClick={() => requestCsvDownload('selected')}
@@ -659,15 +713,12 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                   type="button"
                   onClick={() => requestCsvDownload('all')}
                   disabled={tabScopedRecords.length === 0 || activeCsvFields.length === 0}
-                  className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-orange-50 px-4 py-3 text-sm font-black text-emerald-700 transition-colors hover:from-emerald-100 hover:to-orange-100 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm font-semibold text-slate-500 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <span>Todos</span>
-                  <span className="text-xs text-emerald-500">{tabScopedRecords.length}</span>
+                  <span className="text-xs text-slate-400">{tabScopedRecords.length}</span>
                 </button>
               </div>
-              <p className="text-xs text-slate-400">
-                Selecciona las columnas que quieras exportar. Luego confirma la descarga.
-              </p>
             </div>
           </div>
         </div>
@@ -820,7 +871,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                 const paisData = getCountryMetaForRecord(r);
                 const ownerData = myAgents.find(a => a.nombre === r.responsable) || myAgents[0];
                 const inProspecting = countsAsProspecting(r);
-                const sectorLabel = sectorNameById[r.sector] || r.sector;
+                const sectorLabel = getSectorName(r.sector);
                 const stageMeta = getPipelineStageMeta(r.stage, r);
 
                 return (
@@ -879,6 +930,17 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                           <Grid size={18} />
                         </button>
                       )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenWorkspaceConversation?.(r);
+                        }}
+                        title={t('dir_open_conversation')}
+                        className="p-2 rounded-full text-slate-300 hover:text-[#25D366] hover:bg-emerald-50 transition-colors"
+                      >
+                        <MessageCircle size={18} />
+                      </button>
                       <button type="button" className="p-2 text-slate-300 hover:text-[#FF5A1F] hover:bg-orange-100 rounded-full transition-colors">
                         <ChevronRight size={20} />
                       </button>
@@ -1058,7 +1120,7 @@ export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTe
                         <td className="py-3 font-bold text-sm text-slate-700">{r.nombre}</td>
                         <td className="py-3 text-sm text-slate-600">{r.numero}</td>
                         <td className="py-3 text-sm text-slate-600">{r.correo || '-'}</td>
-                        <td className="py-3 text-sm text-slate-600">{sectorNameById[r.sector] || r.sector}</td>
+                        <td className="py-3 text-sm text-slate-600">{getSectorName(r.sector)}</td>
                       </tr>
                     ))}
                   </tbody>

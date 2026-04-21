@@ -11,8 +11,8 @@ const DEFAULT_SECTORS = [
   { code: 'BIN', name: 'Bienes Raíces', icon: '🏢', color: 'from-stone-400 to-stone-600', sortOrder: 6 },
   { code: 'FIT', name: 'Fitness', icon: '💪', color: 'from-red-400 to-red-600', sortOrder: 7 },
   { code: 'MAR', name: 'E-commerce', icon: '🛒', color: 'from-yellow-400 to-yellow-600', sortOrder: 8 },
-  { code: 'LID', name: 'Liderazgo', icon: '⭐', color: 'from-violet-400 to-violet-600', sortOrder: 9 },
 ];
+const LEGACY_INACTIVE_SECTOR_CODES = new Set(['LID']);
 
 const nowSql = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -25,6 +25,13 @@ const normalizeCode = (value = '') =>
 const normalizeName = (value = '') => String(value || '').trim();
 const normalizeIcon = (value = '') => String(value || '').trim();
 const normalizeColor = (value = '') => String(value || '').trim();
+const normalizeBoolean = (value, fallback = true) => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value === 'boolean') return value;
+  if (value === 1 || value === '1') return true;
+  if (value === 0 || value === '0') return false;
+  return Boolean(value);
+};
 
 const buildSectorCode = (name = '') => {
   const normalized = String(name || '')
@@ -84,8 +91,15 @@ export const sectorService = {
   async ensureDefaultSectors(workspaceId) {
     if (!workspaceId) return;
 
-    const existingCodes = await getExistingCodes(workspaceId);
     const now = nowSql();
+    for (const legacyCode of LEGACY_INACTIVE_SECTOR_CODES) {
+      await executeQuery(
+        'UPDATE `sectors` SET `isActive` = 0, `updatedAt` = ? WHERE `workspaceId` = ? AND `code` = ?',
+        [now, workspaceId, legacyCode],
+      );
+    }
+
+    const existingCodes = await getExistingCodes(workspaceId);
 
     for (const sector of DEFAULT_SECTORS) {
       if (existingCodes.has(sector.code)) continue;
@@ -178,5 +192,46 @@ export const sectorService = {
     );
 
     return { status: 200, payload: { ok: true, sectorId } };
+  },
+
+  async updateSector(sectorId, payload = {}, workspaceId) {
+    if (!sectorId || !workspaceId) {
+      return { status: 400, payload: { error: 'sectorId y workspaceId son obligatorios.' } };
+    }
+
+    const rows = await queryRows(
+      'SELECT `id`, `name`, `icon`, `color`, `sortOrder`, `isActive` FROM `sectors` WHERE `id` = ? AND `workspaceId` = ? LIMIT 1',
+      [sectorId, workspaceId],
+    );
+
+    if (rows.length === 0) {
+      return { status: 404, payload: { error: 'Sector no encontrado.' } };
+    }
+
+    const currentSector = rows[0];
+    const name = normalizeName(payload.name ?? payload.nombre ?? currentSector.name);
+    if (!name) {
+      return { status: 400, payload: { error: 'name es obligatorio.' } };
+    }
+
+    const icon = normalizeIcon(payload.icon ?? currentSector.icon) || '✨';
+    const color = normalizeColor(payload.color ?? currentSector.color) || 'from-sky-400 to-indigo-500';
+    const sortOrder = Number.isFinite(Number(payload.sortOrder))
+      ? Math.max(0, Number(payload.sortOrder))
+      : Number(currentSector.sortOrder) || 0;
+    const isActive = normalizeBoolean(payload.isActive, currentSector.isActive === 1 || currentSector.isActive === true);
+    const now = nowSql();
+
+    await executeQuery(
+      'UPDATE `sectors` SET `name` = ?, `icon` = ?, `color` = ?, `sortOrder` = ?, `isActive` = ?, `updatedAt` = ? WHERE `id` = ? AND `workspaceId` = ?',
+      [name, icon, color, sortOrder, isActive ? 1 : 0, now, sectorId, workspaceId],
+    );
+
+    const updatedRows = await queryRows(
+      'SELECT `id`, `workspaceId`, `code`, `name`, `icon`, `color`, `sortOrder`, `isActive`, `createdAt`, `updatedAt` FROM `sectors` WHERE `id` = ? LIMIT 1',
+      [sectorId],
+    );
+
+    return { status: 200, payload: { sector: mapSectorRow(updatedRows[0]) } };
   },
 };

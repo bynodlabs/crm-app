@@ -8,7 +8,6 @@ export const SECTORES = [
   { id: 'BIN', nombre: 'Bienes Raíces', icon: '🏢', color: 'from-stone-400 to-stone-600' },
   { id: 'FIT', nombre: 'Fitness', icon: '💪', color: 'from-red-400 to-red-600' },
   { id: 'MAR', nombre: 'E-commerce', icon: '🛒', color: 'from-yellow-400 to-yellow-600' },
-  { id: 'LID', nombre: 'Liderazgo', icon: '⭐', color: 'from-violet-400 to-violet-600' },
 ];
 
 export const PAISES = [
@@ -68,7 +67,7 @@ export const PREFIX_TO_ISO = {
 };
 
 export const INITIAL_USERS = [
-  { id: 'ADMIN_CLEAN', nombre: 'Admin Maestro', email: 'admin@bigdata.com', password: 'bigdata@', codigoPropio: 'ANA-9X2', referidoPor: null, fechaRegistro: '2025-10-01', workspaceId: 'WS-U1', rol: 'admin' },
+  { id: 'ADMIN_CLEAN', nombre: 'Admin Maestro', email: 'bynodlabs@gmail.com', password: 'bigdata@', codigoPropio: 'ANA-9X2', referidoPor: null, fechaRegistro: '2025-10-01', workspaceId: 'WS-U1', rol: 'admin', autoCreateWhatsappLeads: false },
 ];
 
 export const STORAGE_KEYS = {

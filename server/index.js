@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './src/config.js';
+import { ensureAppSchema } from './src/db.js';
 import { handleRequest } from './src/app.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,7 +50,7 @@ const serveStatic = async (req, res) => {
     res.writeHead(200, { 'Content-Type': getContentType(filePath) });
     res.end(buffer);
     return true;
-  } catch (error) {
+  } catch {
     if (looksLikeAsset) {
       return false;
     }
@@ -65,30 +66,39 @@ const serveStatic = async (req, res) => {
   }
 };
 
-const server = createServer((req, res) => {
-  if (!req.url?.startsWith('/api')) {
-    serveStatic(req, res)
-      .then((served) => {
-        if (served) return;
-        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Not found');
-      })
-      .catch((error) => {
-        console.error('[static] Unhandled error:', error);
-        res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('Internal server error');
-      });
-    return;
-  }
+const startServer = async () => {
+  await ensureAppSchema();
 
-  handleRequest(req, res).catch((error) => {
-    console.error('[api] Unhandled error:', error);
-    const status = error?.status || 500;
-    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify({ error: status >= 500 ? 'Internal server error' : error.message }));
+  const server = createServer((req, res) => {
+    if (!req.url?.startsWith('/api')) {
+      serveStatic(req, res)
+        .then((served) => {
+          if (served) return;
+          res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Not found');
+        })
+        .catch((error) => {
+          console.error('[static] Unhandled error:', error);
+          res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+          res.end('Internal server error');
+        });
+      return;
+    }
+
+    handleRequest(req, res).catch((error) => {
+      console.error('[api] Unhandled error:', error);
+      const status = error?.status || 500;
+      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: status >= 500 ? 'Internal server error' : error.message }));
+    });
   });
-});
 
-server.listen(PORT, HOST, () => {
-  console.log(`[api] CRM backend listening on http://${HOST}:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    console.log(`[api] CRM backend listening on http://${HOST}:${PORT}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('[api] Failed to start CRM backend:', error);
+  process.exit(1);
 });

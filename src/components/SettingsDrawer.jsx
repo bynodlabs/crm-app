@@ -43,6 +43,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [displayName, setDisplayName] = useState(currentUser?.nombre || '');
   const [avatarDraft, setAvatarDraft] = useState(currentUser?.avatarUrl || '');
+  const [autoCreateWhatsappLeads, setAutoCreateWhatsappLeads] = useState(Boolean(currentUser?.autoCreateWhatsappLeads));
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
@@ -69,6 +70,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
     setConfirmPass('');
     setDisplayName(currentUser?.nombre || '');
     setAvatarDraft(currentUser?.avatarUrl || '');
+    setAutoCreateWhatsappLeads(Boolean(currentUser?.autoCreateWhatsappLeads));
     setErrorMsg('');
     setSuccessMsg('');
     onClose();
@@ -79,7 +81,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
     handleClose();
   };
 
-  const saveProfileDraft = async (nextName, nextAvatar, successText = t('settings_success_profile')) => {
+  const saveProfileDraft = async (nextName, nextAvatar, nextAutoCreateWhatsappLeads = autoCreateWhatsappLeads, successText = t('settings_success_profile')) => {
     setErrorMsg('');
 
     const safeName = String(nextName || '').trim();
@@ -90,14 +92,19 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
 
     if (
       safeName === (currentUser?.nombre || '').trim() &&
-      nextAvatar === (currentUser?.avatarUrl || '')
+      nextAvatar === (currentUser?.avatarUrl || '') &&
+      Boolean(nextAutoCreateWhatsappLeads) === Boolean(currentUser?.autoCreateWhatsappLeads)
     ) {
       return { ok: true, skipped: true };
     }
 
     if (onUpdateProfile) {
       setIsSavingProfile(true);
-      const result = await onUpdateProfile({ nombre: safeName, avatarUrl: nextAvatar });
+      const result = await onUpdateProfile({
+        nombre: safeName,
+        avatarUrl: nextAvatar,
+        autoCreateWhatsappLeads: Boolean(nextAutoCreateWhatsappLeads),
+      });
       setIsSavingProfile(false);
       if (!result?.ok) {
         setErrorMsg(resolveMessage(result, 'settings_error_update_profile'));
@@ -106,6 +113,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
       setSuccessMsg(successText);
       setDisplayName(result?.user?.nombre || safeName);
       setAvatarDraft(result?.user?.avatarUrl || nextAvatar);
+      setAutoCreateWhatsappLeads(Boolean(result?.user?.autoCreateWhatsappLeads ?? nextAutoCreateWhatsappLeads));
       return result;
     }
 
@@ -118,7 +126,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
     }
 
     nameSaveTimeoutRef.current = window.setTimeout(() => {
-      saveProfileDraft(nextName, avatarDraft, t('settings_success_name'));
+      saveProfileDraft(nextName, avatarDraft, autoCreateWhatsappLeads, t('settings_success_name'));
       nameSaveTimeoutRef.current = null;
     }, 650);
   };
@@ -134,7 +142,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
       window.clearTimeout(nameSaveTimeoutRef.current);
       nameSaveTimeoutRef.current = null;
     }
-    saveProfileDraft(displayName, avatarDraft, t('settings_success_name'));
+    saveProfileDraft(displayName, avatarDraft, autoCreateWhatsappLeads, t('settings_success_name'));
   };
 
   const handlePickAvatar = () => {
@@ -155,7 +163,7 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
       setAvatarDraft(compressedAvatar);
       setErrorMsg('');
       setSuccessMsg('');
-      await saveProfileDraft(displayName || currentUser?.nombre || '', compressedAvatar, t('settings_success_avatar'));
+      await saveProfileDraft(displayName || currentUser?.nombre || '', compressedAvatar, autoCreateWhatsappLeads, t('settings_success_avatar'));
     } catch {
       setErrorMsg(t('settings_error_process_image'));
     }
@@ -190,6 +198,22 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
         setConfirmPass('');
         setSuccessMsg('');
       }, 2000);
+    }
+  };
+
+  const handleToggleAutoCreateWhatsappLeads = async () => {
+    const nextValue = !autoCreateWhatsappLeads;
+    setAutoCreateWhatsappLeads(nextValue);
+    setSuccessMsg('');
+    const result = await saveProfileDraft(
+      displayName || currentUser?.nombre || '',
+      avatarDraft,
+      nextValue,
+      t('settings_success_whatsapp_auto_leads'),
+    );
+
+    if (!result?.ok) {
+      setAutoCreateWhatsappLeads(Boolean(currentUser?.autoCreateWhatsappLeads));
     }
   };
 
@@ -250,6 +274,36 @@ export function SettingsDrawer({ isOpen, onClose, currentUser, isDarkMode, setIs
               {errorMsg && <p className="text-[11px] text-rose-500 font-bold leading-tight bg-rose-50 p-2 rounded-lg">{errorMsg}</p>}
               {successMsg && <p className="text-[11px] text-emerald-600 font-bold leading-tight bg-emerald-50 p-2 rounded-lg">{successMsg}</p>}
             </div>
+          </div>
+
+          <div className="space-y-3">
+            <h5 className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t('settings_whatsapp_title')}</h5>
+            <button
+              type="button"
+              onClick={handleToggleAutoCreateWhatsappLeads}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-left transition-colors hover:bg-slate-100"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800">{t('settings_whatsapp_auto_leads')}</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">{t('settings_whatsapp_auto_leads_hint')}</p>
+                </div>
+                <span
+                  className={`relative mt-0.5 inline-flex h-7 w-12 shrink-0 rounded-full transition-colors ${
+                    autoCreateWhatsappLeads ? 'bg-[#25D366]' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1 inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+                      autoCreateWhatsappLeads ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  ></span>
+                </span>
+              </div>
+              <p className={`mt-3 text-[11px] font-bold uppercase tracking-[0.12em] ${autoCreateWhatsappLeads ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {autoCreateWhatsappLeads ? t('common_on') : t('common_off')}
+              </p>
+            </button>
           </div>
 
           <div className="space-y-4">

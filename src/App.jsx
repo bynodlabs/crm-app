@@ -282,7 +282,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   ];
   const getMissingSessionMessage = useCallback(() => {
     if (currentUser?.id) {
-      return 'Esta cuenta está abierta solo en modo local y no tiene token activo del backend. Para generar el QR necesitas una sesión autenticada contra el backend.';
+      return 'Esta cuenta no tiene token activo del backend.';
     }
 
     return 'Tu sesión actual no está conectada al backend. Cierra sesión e inicia sesión nuevamente para generar el QR.';
@@ -386,6 +386,11 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
     }
   }, [handleReloadQr]);
 
+  const handleRestartQrSession = useCallback(async () => {
+    setQrFeedback('');
+    await handleDisconnectQr();
+  }, [handleDisconnectQr]);
+
   const handleVerifyCurrentSession = useCallback(async () => {
     if (!onVerifySession) {
       await handleReloadQr();
@@ -467,7 +472,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   const renderQrContent = () => {
     if (qrState === 'loading') {
       return (
-        <div className="flex h-full min-h-[320px] items-center justify-center">
+        <div className="flex h-full min-h-[280px] items-center justify-center">
           <div className={`flex flex-col items-center gap-4 rounded-[1.7rem] border px-8 py-10 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
             <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-[#25D366]" />
             <div className="text-center">
@@ -481,7 +486,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
     if (qrState === 'expired') {
       return (
-        <div className="relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-[1.9rem] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))] p-4">
+        <div className="relative flex min-h-[280px] items-center justify-center overflow-hidden rounded-[1.9rem] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))] p-4">
           <div className="absolute inset-0 bg-white/55 backdrop-blur-[2px]" />
           {qrImage ? (
             <div className="relative scale-[0.98] opacity-35">
@@ -496,14 +501,26 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               <p className={`max-w-[220px] text-center text-xs leading-5 ${mutedText}`}>
                 {qrFeedback || 'Genera un nuevo código para continuar con la vinculación.'}
               </p>
-              <button
-                type="button"
-                onClick={handleReloadQr}
-                disabled={isQrBusy}
-                className="rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5"
-              >
-                Generar nuevo código
-              </button>
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleReloadQr}
+                  disabled={isQrBusy}
+                  className={`relative overflow-hidden rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5 ${isQrBusy ? 'cursor-not-allowed opacity-70' : 'animate-pulse'}`}
+                >
+                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.24),transparent)]" />
+                  {isQrBusy ? 'Cargando...' : 'Generar nuevo código'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRestartQrSession}
+                  disabled={isQrBusy}
+                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold transition-colors ${isDarkMode ? 'text-slate-300 hover:bg-white/5 hover:text-white' : 'text-slate-500 hover:bg-orange-50 hover:text-[#FF5A1F]'} ${isQrBusy ? 'cursor-not-allowed opacity-60' : 'animate-pulse'}`}
+                >
+                  <span className="h-2 w-2 rounded-full bg-[#FF5A1F]" />
+                  <span className="whitespace-nowrap">Desconectar y volver a vincular</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -512,23 +529,31 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
     if (qrState === 'auth') {
       return (
-        <div className="relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-[1.9rem] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))] p-4">
-          <div className="absolute inset-0 bg-white/55 backdrop-blur-[2px]" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className={`flex flex-col items-center gap-3 rounded-[1.6rem] border px-6 py-5 text-center shadow-[0_18px_48px_-26px_rgba(15,23,42,0.35)] ${isDarkMode ? 'border-white/10 bg-[#121212]/95 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
-              <p className="text-sm font-black">Sesión requerida</p>
-              <p className={`max-w-[240px] text-xs leading-5 ${mutedText}`}>
-                {qrFeedback || 'Tu sesión API no está autenticada. Inicia sesión nuevamente para generar el QR.'}
-              </p>
-              <button
-                type="button"
-                onClick={handleVerifyCurrentSession}
-                disabled={isQrBusy}
-                className={`rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5 ${isQrBusy ? 'cursor-not-allowed opacity-70' : ''}`}
-              >
-                {isQrBusy ? 'Verificando...' : 'Verificar sesión'}
-              </button>
+        <div className={`relative mx-auto flex w-full max-w-[560px] flex-col items-center overflow-hidden rounded-[1.9rem] border px-4 py-4 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
+          <div className={`relative mx-auto w-fit rounded-[1.7rem] border p-4 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
+            <div className={`flex h-[220px] w-[220px] items-center justify-center rounded-2xl border border-dashed sm:h-[250px] sm:w-[250px] ${
+              isDarkMode
+                ? 'border-white/10 bg-white/[0.03] text-slate-400'
+                : 'border-slate-200 bg-slate-50 text-slate-400'
+            }`}>
+              <div className="text-center">
+                <p className="text-sm font-bold">QR no disponible</p>
+                <p className="mt-1 text-xs">Inicia o verifica tu sesion para generarlo.</p>
+              </div>
             </div>
+          </div>
+          <p className={`mt-4 max-w-[420px] text-center text-xs font-medium ${mutedText}`}>
+            {qrFeedback || 'Cuando tu sesion este autorizada, aqui aparecera el codigo QR.'}
+          </p>
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={handleVerifyCurrentSession}
+              disabled={isQrBusy}
+              className={`rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5 ${isQrBusy ? 'cursor-not-allowed opacity-70' : ''}`}
+            >
+              {isQrBusy ? 'Verificando...' : 'Verificar sesión'}
+            </button>
           </div>
         </div>
       );
@@ -536,7 +561,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
     if (qrState === 'connected') {
       return (
-        <div className={`flex min-h-[320px] items-center justify-center rounded-[1.9rem] border p-5 ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50/80'}`}>
+        <div className={`flex min-h-[280px] items-center justify-center rounded-[1.9rem] border p-5 ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50/80'}`}>
           <div className={`w-full max-w-[320px] rounded-[1.7rem] border p-6 text-center shadow-[0_18px_48px_-30px_rgba(16,185,129,0.45)] ${isDarkMode ? 'border-white/10 bg-[#111317] text-white' : 'border-white bg-white text-slate-900'}`}>
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_14px_28px_-18px_rgba(16,185,129,0.65)]">
               <CheckCircle size={24} />
@@ -553,7 +578,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               disabled={isQrBusy}
               className={`mt-6 rounded-full px-5 py-2.5 text-sm font-black transition-transform hover:-translate-y-0.5 ${isDarkMode ? 'bg-white/10 text-white hover:bg-white/15' : 'bg-slate-100 text-slate-700 hover:bg-slate-200/80'} ${isQrBusy ? 'cursor-not-allowed opacity-60' : ''}`}
             >
-              Disconnect
+              {isQrBusy ? 'Desconectando...' : 'Desconectar'}
             </button>
           </div>
         </div>
@@ -561,17 +586,30 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
     }
 
     return (
-      <div className={`relative overflow-hidden rounded-[1.9rem] border px-4 py-5 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
-        <div className={`relative mx-auto w-fit rounded-[1.7rem] border p-5 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
+      <div className={`relative mx-auto w-full max-w-[560px] overflow-hidden rounded-[1.9rem] border px-4 py-4 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
+        <div className={`relative mx-auto w-fit rounded-[1.7rem] border p-4 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
           {qrImage ? (
-            <img src={qrImage} alt="Código QR de WhatsApp Web" className="h-[250px] w-[250px] rounded-2xl object-contain sm:h-[290px] sm:w-[290px]" />
+            <img src={qrImage} alt="Código QR de WhatsApp Web" className="h-[220px] w-[220px] rounded-2xl object-contain sm:h-[250px] sm:w-[250px]" />
           ) : (
-            <div className="flex h-[250px] w-[250px] items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold text-slate-400 sm:h-[290px] sm:w-[290px]">
+            <div className="flex h-[220px] w-[220px] items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold text-slate-400 sm:h-[250px] sm:w-[250px]">
               Esperando QR...
             </div>
           )}
         </div>
         <p className={`mt-4 text-center text-xs font-medium ${mutedText}`}>Escanea este código con WhatsApp para vincular tu sesión.</p>
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={handleReloadQr}
+            disabled={isQrBusy}
+            className={`rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-4 py-2 text-xs font-black text-white shadow-[0_14px_28px_-18px_rgba(255,90,31,0.55)] transition-transform hover:-translate-y-0.5 ${isQrBusy ? 'cursor-not-allowed opacity-70' : ''}`}
+          >
+            {isQrBusy ? 'Cargando...' : 'Generar nuevo código'}
+          </button>
+        </div>
+        {qrFeedback ? (
+          <p className={`mt-3 text-center text-[11px] ${mutedText}`}>{qrFeedback}</p>
+        ) : null}
       </div>
     );
   };
@@ -608,17 +646,9 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
                 <p className={`mt-3 max-w-xl text-sm leading-7 sm:text-[15px] ${softText}`}>
                   Conecta tu dispositivo escaneando un código.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleReloadQr}
-                  disabled={isQrBusy}
-                  className={`mt-7 inline-flex w-fit items-center justify-center rounded-full px-6 py-3.5 text-sm font-black text-white shadow-[0_18px_36px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5 ${isQrBusy ? 'opacity-70' : ''} bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)]`}
-                >
-                  Generar Código QR
-                </button>
               </div>
 
-              <div className={`rounded-[2rem] border p-4 sm:p-5 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
+              <div className={`mx-auto w-full max-w-[620px] rounded-[2rem] border p-4 sm:p-5 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
                 <div className="flex items-center justify-between gap-3 pb-4">
                   <div>
                     <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${mutedText}`}>Escaneo QR</p>
@@ -630,7 +660,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
                 </div>
                 {renderQrContent()}
                 <div className={`mt-4 rounded-2xl border px-4 py-3 text-xs ${isDarkMode ? 'border-white/8 bg-white/[0.03] text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600'}`}>
-                  Abre WhatsApp en tu teléfono, entra a Dispositivos vinculados y escanea este código.
+                  Abre WhatsApp en tu teléfono y escanea este código.
                 </div>
               </div>
             </div>
@@ -638,7 +668,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
           <section className={`relative overflow-hidden rounded-[2rem] border p-6 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.32)] sm:p-8 ${rightCardClass}`}>
             <div className={`absolute -right-8 top-10 h-36 w-36 rounded-full blur-3xl ${isDarkMode ? 'bg-violet-500/10' : 'bg-violet-100/70'}`}></div>
-            <div className="relative flex h-full flex-col justify-between gap-6">
+            <div className="relative flex h-full flex-col gap-6">
               <div>
                 <div className="mb-4 flex items-center gap-3">
                   <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-violet-400/20 bg-violet-500/10 text-violet-300' : 'border-violet-100 bg-violet-50 text-violet-700'}`}>
@@ -649,7 +679,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
                   </div>
                 </div>
                 <h2 className={`text-2xl font-black sm:text-3xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Business API</h2>
-                <p className={`mt-3 max-w-xl text-sm leading-7 sm:text-[15px] ${softText}`}>
+                <p className={`mt-3 max-w-none text-sm leading-6 sm:text-[15px] ${softText}`}>
                   Conexión oficial para empresas. Requiere Facebook Business.
                 </p>
               </div>
@@ -657,7 +687,7 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               <div className={`rounded-[1.75rem] border p-5 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/80'}`}>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {benefits.map((item) => (
-                    <div key={item} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-semibold ${isDarkMode ? 'bg-white/[0.04] text-slate-200' : 'bg-white text-slate-700 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.22)]'}`}>
+                    <div key={item} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-[13px] font-medium leading-5 ${isDarkMode ? 'bg-white/[0.04] text-slate-200' : 'bg-white text-slate-700 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.22)]'}`}>
                       <CheckCircle size={16} className="text-emerald-500" />
                       <span>{item}</span>
                     </div>
@@ -1103,6 +1133,23 @@ export default function App() {
     { id: 'tools', label: 'Herramientas', icon: <Grid size={18} />, isActive: activeTab === 'tools' || activeTab === 'network', onClick: () => setActiveTab('tools') },
   ];
 
+  const handleOpenWorkspaceConversation = useCallback((record) => {
+    const isArchivedRecord = Boolean(record?.isArchived) || record?.estadoProspeccion === 'Archivado';
+    if (typeof window !== 'undefined' && record?.id) {
+      try {
+        window.sessionStorage.setItem('crm-workspace-target-conversation', JSON.stringify({
+          leadId: record.id,
+          inboxFilter: 'bigdata',
+          workspaceTab: isArchivedRecord ? 'archived' : 'active',
+        }));
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    setActiveTab('prospecting');
+  }, [setActiveTab]);
+
   const handleMobileNavClick = (handler) => {
     setIsMobileMenuOpen(false);
     handler();
@@ -1374,7 +1421,7 @@ export default function App() {
         {activeTab === 'home' && <DashboardView records={dashboardDisplayedRecords} allRecords={records} duplicateRecords={duplicateRecords} onSelectRecord={setSelectedRecord} dashboardSectorFilter={dashboardSectorFilter} setDashboardSectorFilter={setDashboardSectorFilter} setActiveTab={setActiveTab} myAgents={myAgents} t={t} currentUser={currentUser} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} onCreateRecord={handleCreateRecord} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
         {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
-        {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
+        {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} onOpenWorkspaceConversation={handleOpenWorkspaceConversation} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
         {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} currentUser={currentUser} onVerifySession={handleVerifySession} />}
         {activeTab === 'reports' && <ReportsView records={records} duplicateRecords={duplicateRecords} currentUser={currentUser} myAgents={myAgents} usersDb={usersDb} sharedLinks={sharedLinks} t={t} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'tools' && <ToolsView isDarkMode={isDarkMode} onOpenShareLeads={() => setActiveTab('network')} />}
@@ -1532,7 +1579,7 @@ function CleanDashboardView({
   const catB = globalRecords.filter(r => r.categoria === 'B').length;
   const catC = globalRecords.filter(r => r.categoria === 'C').length;
   const usuariosOperativos = useMemo(
-    () => mergeUniqueUsers(usersDb).filter((user) => user.email !== 'admin@bigdata.com'),
+    () => mergeUniqueUsers(usersDb).filter((user) => user.email !== 'bynodlabs@gmail.com'),
     [usersDb],
   );
   const userNameById = new Map(usersDb.map((user) => [user.id, user.nombre]));

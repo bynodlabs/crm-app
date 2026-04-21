@@ -1,11 +1,13 @@
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
+import { conversationService } from './conversation-service.js';
 
 const WA_SESSION_ROOT = path.resolve(process.cwd(), 'server', '.wa-sessions');
 const DEFAULT_BAILEYS_VERSION = [2, 3000, 1015901307];
 const QR_WAIT_ATTEMPTS = 20;
 const QR_WAIT_MS = 250;
 const MAX_CACHED_CHAT_MESSAGES = 120;
+const INITIAL_HISTORY_CHAT_LIMIT = 10;
 
 const sessions = new Map();
 
@@ -43,6 +45,7 @@ const ensureSessionState = (workspaceId) => {
       rawMessageCache: new Map(),
       chatSubscribers: new Map(),
       unreadCounts: new Map(),
+      historyBootstrapComplete: false,
     });
   }
 
@@ -88,6 +91,8 @@ const formatPhoneNumberFromJid = (jid = '') => {
 const isLidJid = (value = '') => String(value || '').includes('@lid');
 
 const normalizeJid = (value = '') => String(value || '').trim();
+
+const isGroupJid = (value = '') => normalizeJid(value).endsWith('@g.us');
 
 const isDirectChatJid = (value = '') => {
   const normalized = normalizeJid(value);
@@ -466,6 +471,42 @@ const asMessageTimestamp = (value) => {
   return Date.now();
 };
 
+const resolveHistoryMessageJid = (session, message = {}) => {
+  const protocolMessage = unwrapMessageContent(message?.message)?.protocolMessage;
+  const protocolJid = protocolMessage?.key?.remoteJid || message?.key?.remoteJid || message?.key?.participant || '';
+  const jid = normalizeContactJid(session, protocolJid);
+  return isDirectChatJid(jid) ? jid : '';
+};
+
+const selectInitialHistoryMessages = (session, messages = [], limit = INITIAL_HISTORY_CHAT_LIMIT) => {
+  if (!Array.isArray(messages) || messages.length === 0) return [];
+  if (!Number.isFinite(limit) || limit <= 0) return [];
+
+  const latestByJid = new Map();
+
+  messages.forEach((message) => {
+    const jid = resolveHistoryMessageJid(session, message);
+    if (!jid) return;
+
+    const timestamp = asMessageTimestamp(message?.messageTimestamp);
+    const previousTimestamp = latestByJid.get(jid) || 0;
+    if (timestamp >= previousTimestamp) {
+      latestByJid.set(jid, timestamp);
+    }
+  });
+
+  if (latestByJid.size === 0) return [];
+
+  const allowedJids = new Set(
+    Array.from(latestByJid.entries())
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .slice(0, limit)
+      .map(([jid]) => jid),
+  );
+
+  return messages.filter((message) => allowedJids.has(resolveHistoryMessageJid(session, message)));
+};
+
 const normalizeEphemeralExpiration = (value) => {
   const numeric = Number(value || 0);
   if (!Number.isFinite(numeric) || numeric <= 0) return 0;
@@ -642,6 +683,12 @@ const cacheChatMessages = async (session, messages = [], { emit = false } = {}) 
     }
 
     session.messageCache.set(serialized.jid, next);
+    await conversationService.persistChatMessage(session.workspaceId, nextMessage, {
+      session,
+      channelKey: session.phoneNumber || session.workspaceId,
+    }).catch((error) => {
+      console.error('[wa][service] persistChatMessage - failed:', error);
+    });
 
     if (emit) {
       emitChatEvent(session, serialized.jid, 'message', { message: nextMessage });
@@ -684,6 +731,37 @@ const buildChatListItems = async (session) => {
   return items
     .filter(Boolean)
     .sort((left, right) => (right.lastMessageTimestamp || 0) - (left.lastMessageTimestamp || 0));
+};
+
+const mergeChatLists = (liveItems = [], storedItems = []) => {
+  const merged = new Map();
+
+  for (const item of storedItems) {
+    const key = String(item?.jid || item?.id || '').trim();
+    if (!key) continue;
+    merged.set(key, { ...item });
+  }
+
+  for (const item of liveItems) {
+    const key = String(item?.jid || item?.id || '').trim();
+    if (!key) continue;
+    const existing = merged.get(key) || {};
+    merged.set(key, {
+      ...existing,
+      ...item,
+      jid: item.jid || existing.jid || key,
+      id: existing.id || item.id || `wa:${item.jid || key}`,
+      name: item.name || existing.name || '',
+      phoneNumber: item.phoneNumber || existing.phoneNumber || '',
+      avatarUrl: item.avatarUrl || existing.avatarUrl || '',
+      lastMessageText: item.lastMessageText || existing.lastMessageText || '',
+      lastMessageTimestamp: item.lastMessageTimestamp || existing.lastMessageTimestamp || 0,
+      lastMessageDirection: item.lastMessageDirection || existing.lastMessageDirection || 'in',
+      unreadCount: Number(item.unreadCount ?? existing.unreadCount ?? 0),
+    });
+  }
+
+  return Array.from(merged.values()).sort((left, right) => (right.lastMessageTimestamp || 0) - (left.lastMessageTimestamp || 0));
 };
 
 const clearReconnectTimer = (session) => {
@@ -848,6 +926,7 @@ const initializeWorkspaceSocket = async (workspaceId) => {
     session.lastError = null;
     session.saveCreds = saveCreds;
     session.manuallyDisconnected = false;
+    session.historyBootstrapComplete = false;
     session.defaultDisappearingMode = normalizeEphemeralExpiration(
       state?.creds?.accountSettings?.defaultDisappearingMode?.ephemeralExpiration,
     );
@@ -857,7 +936,7 @@ const initializeWorkspaceSocket = async (workspaceId) => {
       console.log('[wa][service] initializeWorkspaceSocket - creating socket');
       socket = makeWASocket({
         auth: state,
-        browser: ['CRM NEW 2026', 'Chrome', '1.0.0'],
+        browser: ['Giga BigData', 'Chrome', '1.0.0'],
         printQRInTerminal: false,
         markOnlineOnConnect: false,
         syncFullHistory: true,
@@ -903,7 +982,13 @@ const initializeWorkspaceSocket = async (workspaceId) => {
 
     socket.ev.on('messaging-history.set', (payload = {}) => {
       cacheChatConfig(session, payload.chats || []);
-      Promise.resolve(cacheChatMessages(session, payload.messages || [])).catch((error) => {
+      const historyMessages = session.historyBootstrapComplete
+        ? []
+        : selectInitialHistoryMessages(session, payload.messages || []);
+
+      session.historyBootstrapComplete = true;
+
+      Promise.resolve(cacheChatMessages(session, historyMessages)).catch((error) => {
         console.error('[wa][service] messaging-history.set - cache failed:', error);
       });
     });
@@ -981,6 +1066,9 @@ const initializeWorkspaceSocket = async (workspaceId) => {
           session.chatSubscribers.forEach((subscribers, jid) => {
             emitChatEvent(session, jid, 'status', { connection: serializeStatus(session) });
           });
+          await conversationService.syncChannel(workspaceId, session, session.phoneNumber || workspaceId).catch((error) => {
+            console.error('[wa][service] syncChannel(open) - failed:', error);
+          });
         }
 
         if (connection === 'close') {
@@ -1006,6 +1094,9 @@ const initializeWorkspaceSocket = async (workspaceId) => {
             session.chatSubscribers.forEach((subscribers, jid) => {
               emitChatEvent(session, jid, 'status', { connection: serializeStatus(session) });
             });
+            await conversationService.syncChannel(workspaceId, session, workspaceId).catch((error) => {
+              console.error('[wa][service] syncChannel(loggedOut) - failed:', error);
+            });
             return;
           }
 
@@ -1026,6 +1117,9 @@ const initializeWorkspaceSocket = async (workspaceId) => {
           session.lastError = 'La conexión con WhatsApp se interrumpió.';
           session.chatSubscribers.forEach((subscribers, jid) => {
             emitChatEvent(session, jid, 'status', { connection: serializeStatus(session) });
+          });
+          await conversationService.syncChannel(workspaceId, session, session.phoneNumber || workspaceId).catch((error) => {
+            console.error('[wa][service] syncChannel(close) - failed:', error);
           });
         }
       }).catch((error) => {
@@ -1147,6 +1241,7 @@ export const whatsappService = {
     try {
       const groupsMap = await connection.socket.groupFetchAllParticipating();
       const items = Object.values(groupsMap || {})
+        .filter((group) => isGroupJid(group?.id))
         .map((group) => ({
           id: group.id,
           name: group.subject || 'Grupo sin nombre',
@@ -1217,16 +1312,28 @@ export const whatsappService = {
     }
 
     const session = ensureSessionState(workspaceId);
+    const storedItems = await conversationService.listConversations(workspaceId).catch((error) => {
+      console.error('[wa][service] listChats - stored fallback failed:', error);
+      return [];
+    });
     try {
       await initializeWorkspaceSocket(workspaceId);
     } catch (error) {
-      return buildServiceErrorResponse(error, 'No se pudo abrir la sesión de WhatsApp para listar chats.');
+      return {
+        status: 200,
+        payload: {
+          items: storedItems,
+          connection: serializeStatus(session),
+          warning: asErrorMessage(error, 'No se pudo abrir la sesión de WhatsApp para listar chats en tiempo real.'),
+        },
+      };
     }
 
+    const liveItems = await buildChatListItems(session);
     return {
       status: 200,
       payload: {
-        items: await buildChatListItems(session),
+        items: mergeChatLists(liveItems, storedItems),
         connection: serializeStatus(session),
       },
     };
@@ -1237,14 +1344,34 @@ export const whatsappService = {
       return { status: 400, payload: { error: 'workspaceId y contactId son obligatorios.' } };
     }
 
+    const storedItems = await conversationService.getConversationMessages(workspaceId, contactId).catch((error) => {
+      console.error('[wa][service] getChatMessages - stored fallback failed:', error);
+      return [];
+    });
     let connection;
     try {
       connection = await ensureConnectedSocket(workspaceId);
     } catch (error) {
-      return buildServiceErrorResponse(error, 'No se pudo abrir la sesión de WhatsApp para consultar mensajes.');
+      return {
+        status: 200,
+        payload: {
+          jid: contactId,
+          items: storedItems,
+          connection: serializeStatus(ensureSessionState(workspaceId)),
+          warning: asErrorMessage(error, 'No se pudo abrir la sesión de WhatsApp para consultar mensajes en tiempo real.'),
+        },
+      };
     }
     if (!connection.ok) {
-      return { status: connection.status, payload: connection.payload };
+      return {
+        status: 200,
+        payload: {
+          jid: contactId,
+          items: storedItems,
+          connection: connection.payload.connection,
+          warning: connection.payload.error,
+        },
+      };
     }
 
     const jid = normalizeContactJid(connection.session, contactId);
@@ -1258,7 +1385,9 @@ export const whatsappService = {
       status: 200,
       payload: {
         jid,
-        items: connection.session.messageCache.get(jid) || [],
+        items: (connection.session.messageCache.get(jid) || []).length > 0
+          ? connection.session.messageCache.get(jid) || []
+          : storedItems,
         connection: serializeStatus(connection.session),
       },
     };

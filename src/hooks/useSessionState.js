@@ -165,15 +165,16 @@ export function useSessionState() {
         return false;
       }
 
-      if (normalizedEmail === 'admin@bigdata.com' && safePassword === 'bigdata@') {
+      if (normalizedEmail === 'bynodlabs@gmail.com' && safePassword === 'bigdata@') {
         const adminUser = {
           id: 'ADMIN_CLEAN',
           nombre: 'Admin Maestro',
-          email: 'admin@bigdata.com',
+          email: 'bynodlabs@gmail.com',
           codigoPropio: 'ANA-9X2',
           workspaceId: 'WS-U1',
           rol: 'admin',
           avatarUrl: '',
+          autoCreateWhatsappLeads: false,
         };
 
         setAdminReturnData(null);
@@ -210,7 +211,7 @@ export function useSessionState() {
       };
     }
 
-    if (normalizedEmail === 'admin@bigdata.com') {
+    if (normalizedEmail === 'bynodlabs@gmail.com') {
       return {
         ok: false,
         reason: 'email_exists',
@@ -248,6 +249,7 @@ export function useSessionState() {
       fechaRegistro: getLocalISODate(),
       workspaceId: nextWorkspaceId,
       rol: 'socio',
+      autoCreateWhatsappLeads: false,
     };
 
     try {
@@ -325,7 +327,7 @@ export function useSessionState() {
     return { ok: true };
   };
 
-  const handleUpdateProfile = async ({ nombre, avatarUrl }) => {
+  const handleUpdateProfile = async ({ nombre, avatarUrl, autoCreateWhatsappLeads }) => {
     if (!currentUser) return { ok: false, errorKey: 'err_no_active_session', error: 'No hay sesión activa.' };
 
     const safeName = String(nombre || '').trim();
@@ -339,12 +341,18 @@ export function useSessionState() {
         [currentUser.id]: {
           nombre: nextUser.nombre,
           avatarUrl: nextUser.avatarUrl || '',
+          autoCreateWhatsappLeads: Boolean(nextUser.autoCreateWhatsappLeads),
         },
       }));
       setUsersDb((prev) =>
         prev.map((user) => {
           if (user.id === currentUser.id) {
-            return { ...user, nombre: nextUser.nombre, avatarUrl: nextUser.avatarUrl };
+            return {
+              ...user,
+              nombre: nextUser.nombre,
+              avatarUrl: nextUser.avatarUrl,
+              autoCreateWhatsappLeads: Boolean(nextUser.autoCreateWhatsappLeads),
+            };
           }
 
           return user;
@@ -358,7 +366,12 @@ export function useSessionState() {
     };
 
     try {
-      const result = await api.updateProfile({ userId: currentUser.id, nombre: safeName, avatarUrl });
+      const result = await api.updateProfile({
+        userId: currentUser.id,
+        nombre: safeName,
+        avatarUrl,
+        autoCreateWhatsappLeads: Boolean(autoCreateWhatsappLeads),
+      });
       const updatedUser = {
         ...currentUser,
         ...result.user,
@@ -373,7 +386,12 @@ export function useSessionState() {
       }
     }
 
-    const updatedUser = { ...currentUser, nombre: safeName, avatarUrl };
+    const updatedUser = {
+      ...currentUser,
+      nombre: safeName,
+      avatarUrl,
+      autoCreateWhatsappLeads: Boolean(autoCreateWhatsappLeads),
+    };
     return commitProfileLocally(updatedUser);
   };
 

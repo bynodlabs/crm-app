@@ -3,7 +3,7 @@ import { Mail, Phone, Save, User, X } from 'lucide-react';
 import { detectCountryCodeFromPhone, getCountryMetaForRecord } from '../lib/country';
 import { getLocalISOTime } from '../lib/date';
 import { getPipelineStageMeta, getPipelineStageOptions, normalizeLeadStage } from '../lib/lead-pipeline';
-import { getSectorLabel } from '../lib/sector-utils';
+import { GENERAL_SECTOR_ID, getSectorLabel, normalizeSectorCode } from '../lib/sector-utils';
 import { LANG_LOCALES } from '../lib/i18n';
 import { useSectors } from '../hooks/useSectors';
 
@@ -11,7 +11,7 @@ const countsAsProspecting = (status) => status !== 'Nuevo' && status !== 'Descar
 const isArchivedStatus = (status) => status === 'Archivado';
 
 export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, language = 'es' }) {
-  const { sectors, activeSectors } = useSectors();
+  const { sectors, activeSectors } = useSectors({ records: record ? [record] : [] });
   const [draft, setDraft] = useState(record);
   const locale = LANG_LOCALES[language] || LANG_LOCALES.en;
 
@@ -25,6 +25,7 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
   );
   const pipelineOptions = useMemo(() => getPipelineStageOptions(), []);
   const activeStage = useMemo(() => getPipelineStageMeta(draft?.stage, draft), [draft]);
+  const normalizedDraftSector = useMemo(() => normalizeSectorCode(draft?.sector), [draft?.sector]);
 
   if (!record || !draft) return null;
 
@@ -32,6 +33,7 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
     const nextRecord = {
       ...record,
       ...draft,
+      sector: normalizeSectorCode(draft?.sector),
     };
 
     if ((draft.estadoProspeccion || 'Nuevo') !== (record.estadoProspeccion || 'Nuevo')) {
@@ -217,18 +219,21 @@ export function RecordDetailModal({ record, onClose, onUpdate, myAgents, t, lang
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <span className="font-medium">{t('common_sector')}</span>
                   <select
-                    value={draft.sector || ''}
+                    value={normalizedDraftSector}
                     onChange={(e) => setDraft((prev) => ({ ...prev, sector: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100 sm:min-w-[170px] sm:w-auto"
                   >
+                    <option value={GENERAL_SECTOR_ID}>
+                      {getSectorLabel(language, GENERAL_SECTOR_ID, sectors)}
+                    </option>
                     {activeSectors.map((sector) => (
                       <option key={sector.id} value={sector.id}>
                         {getSectorLabel(language, sector.id, sectors)}
                       </option>
                     ))}
-                    {!activeSectors.some((sector) => sector.id === draft.sector) && draft.sector ? (
-                      <option value={draft.sector}>
-                        {getSectorLabel(language, draft.sector, sectors)}
+                    {!activeSectors.some((sector) => sector.id === normalizedDraftSector) && normalizedDraftSector !== GENERAL_SECTOR_ID ? (
+                      <option value={normalizedDraftSector}>
+                        {getSectorLabel(language, normalizedDraftSector, sectors)}
                       </option>
                     ) : null}
                   </select>

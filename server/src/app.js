@@ -9,6 +9,7 @@ import { sectorService } from './services/sector-service.js';
 import { sharedLinkService } from './services/shared-link-service.js';
 import { userService } from './services/user-service.js';
 import { whatsappService } from './services/whatsapp-service.js';
+import { conversationService } from './services/conversation-service.js';
 
 const withCors = (res) => {
   res.setHeader('Access-Control-Allow-Origin', config.corsOrigin);
@@ -391,6 +392,15 @@ export async function handleRequest(req, res) {
   }
 
   const sectorMatch = pathname.match(/^\/api\/sectors\/([^/]+)$/);
+  if (sectorMatch && req.method === 'PATCH') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const body = await readJsonBody(req);
+    const result = await sectorService.updateSector(sectorMatch[1], body, authUser.workspaceId);
+    sendJson(res, result.status, result.payload);
+    return;
+  }
+
   if (sectorMatch && req.method === 'DELETE') {
     const authUser = await getAuthenticatedUser(req, res);
     if (!authUser) return;
@@ -420,6 +430,18 @@ export async function handleRequest(req, res) {
   }
 
   const waChatMessagesMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/messages$/);
+  const waChatSummaryMatch = pathname.match(/^\/api\/wa\/chats\/([^/]+)\/summary$/);
+  if (waChatSummaryMatch && req.method === 'GET') {
+    const authUser = await getAuthenticatedUser(req, res);
+    if (!authUser) return;
+    const summary = await conversationService.getConversationSummary(
+      authUser.workspaceId,
+      decodeURIComponent(waChatSummaryMatch[1]),
+    );
+    sendJson(res, 200, { item: summary });
+    return;
+  }
+
   if (waChatMessagesMatch && req.method === 'GET') {
     const authUser = await getAuthenticatedUser(req, res);
     if (!authUser) return;

@@ -14,6 +14,7 @@ const DEFAULT_DB = {
   adminProfile: {
     nombre: 'Admin Maestro',
     avatarUrl: '',
+    autoCreateWhatsappLeads: false,
   },
   users: [],
   records: [],
@@ -130,6 +131,7 @@ const fromSqlDateTime = (value) => {
 const toBoolean = (value) => value === true || value === 1 || value === '1';
 
 let pool;
+let schemaReadyPromise;
 
 const getPool = () => {
   if (!pool) {
@@ -149,6 +151,40 @@ const getPool = () => {
   }
 
   return pool;
+};
+
+const ensureColumn = async (connection, tableName, columnName, definition) => {
+  const [rows] = await connection.query(
+    `SELECT 1
+     FROM information_schema.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = ?
+       AND COLUMN_NAME = ?
+     LIMIT 1`,
+    [tableName, columnName],
+  );
+
+  if (rows[0]) return;
+  await connection.query(`ALTER TABLE \`${tableName}\` ADD COLUMN \`${columnName}\` ${definition}`);
+};
+
+export const ensureAppSchema = async () => {
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = (async () => {
+      const connection = await getPool().getConnection();
+      try {
+        await ensureColumn(connection, 'adminProfile', 'autoCreateWhatsappLeads', 'TINYINT(1) NOT NULL DEFAULT 0');
+        await ensureColumn(connection, 'users', 'autoCreateWhatsappLeads', 'TINYINT(1) NOT NULL DEFAULT 0');
+      } finally {
+        connection.release();
+      }
+    })().catch((error) => {
+      schemaReadyPromise = null;
+      throw error;
+    });
+  }
+
+  return schemaReadyPromise;
 };
 
 const withTransaction = async (work) => {
@@ -261,6 +297,7 @@ const mapSharedLinkRow = (row) => ({
 });
 
 const loadDbSnapshot = async () => {
+  await ensureAppSchema();
   const [
     adminProfileRows,
     userRows,
@@ -273,8 +310,8 @@ const loadDbSnapshot = async () => {
     sharedLinkSourceRows,
     sessionRows,
   ] = await Promise.all([
-    queryRows('SELECT `nombre`, `avatarUrl` FROM `adminProfile` LIMIT 1'),
-    queryRows('SELECT `id`, `nombre`, `email`, `password`, `codigoPropio`, `referidoPor`, `fechaRegistro`, `workspaceId`, `role`, `avatarUrl` FROM `users` ORDER BY `fechaRegistro` ASC, `id` ASC'),
+    queryRows('SELECT `nombre`, `avatarUrl`, `autoCreateWhatsappLeads` FROM `adminProfile` LIMIT 1'),
+    queryRows('SELECT `id`, `nombre`, `email`, `password`, `codigoPropio`, `referidoPor`, `fechaRegistro`, `workspaceId`, `role`, `avatarUrl`, `autoCreateWhatsappLeads` FROM `users` ORDER BY `fechaRegistro` ASC, `id` ASC'),
     queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `records` ORDER BY `fechaIngreso` DESC, `id` DESC'),
     queryRows('SELECT `recordId`, `historial_index`, `fecha`, `accion` FROM `records_historial` ORDER BY `recordId` ASC, `historial_index` ASC'),
     queryRows('SELECT `id`, `nombre`, `pais`, `numero`, `correo`, `sector`, `subsector`, `origen`, `fechaIngreso`, `nota`, `categoria`, `canal`, `estadoProspeccion`, `stage`, `mensajeEnviado`, `responsable`, `propietarioId`, `workspaceId`, `inProspecting`, `isArchived`, `email`, `notes`, `isShared`, `sharedAt`, `sharedToUserId`, `sharedToUserName`, `receivedBatchId`, `receivedAt`, `sharedFromUserId`, `sharedFromUserName`, `sourceRecordId` FROM `duplicateRecords` ORDER BY `fechaIngreso` DESC, `id` DESC'),
@@ -345,6 +382,7 @@ const loadDbSnapshot = async () => {
       fechaRegistro: fromSqlDateOnly(row.fechaRegistro),
       workspaceId: row.workspaceId ?? '',
       role: row.role ?? '',
+      autoCreateWhatsappLeads: toBoolean(row.autoCreateWhatsappLeads),
     };
     maybeAssign(user, 'avatarUrl', row.avatarUrl);
     return user;
@@ -391,10 +429,11 @@ export async function readDb() {
     db.adminProfile = { ...DEFAULT_DB.adminProfile };
     didChange = true;
   } else {
-    const normalizedAdminProfile = {
-      nombre: String(db.adminProfile.nombre || DEFAULT_DB.adminProfile.nombre).trim() || DEFAULT_DB.adminProfile.nombre,
-      avatarUrl: typeof db.adminProfile.avatarUrl === 'string' ? db.adminProfile.avatarUrl.trim() : '',
-    };
+      const normalizedAdminProfile = {
+        nombre: String(db.adminProfile.nombre || DEFAULT_DB.adminProfile.nombre).trim() || DEFAULT_DB.adminProfile.nombre,
+        avatarUrl: typeof db.adminProfile.avatarUrl === 'string' ? db.adminProfile.avatarUrl.trim() : '',
+        autoCreateWhatsappLeads: toBoolean(db.adminProfile.autoCreateWhatsappLeads),
+      };
 
     if (
       normalizedAdminProfile.nombre !== db.adminProfile.nombre ||
@@ -559,10 +598,12 @@ export async function readDb() {
 }
 
 export async function writeDb(nextDb) {
+  await ensureAppSchema();
   const db = {
     adminProfile: {
       nombre: String(nextDb?.adminProfile?.nombre || DEFAULT_DB.adminProfile.nombre).trim() || DEFAULT_DB.adminProfile.nombre,
       avatarUrl: typeof nextDb?.adminProfile?.avatarUrl === 'string' ? nextDb.adminProfile.avatarUrl.trim() : '',
+      autoCreateWhatsappLeads: Boolean(nextDb?.adminProfile?.autoCreateWhatsappLeads),
     },
     users: Array.isArray(nextDb?.users) ? nextDb.users : [],
     records: Array.isArray(nextDb?.records) ? nextDb.records : [],
@@ -583,12 +624,12 @@ export async function writeDb(nextDb) {
     await connection.query('DELETE FROM `users`');
     await connection.query('DELETE FROM `adminProfile`');
 
-    await insertRows(connection, 'adminProfile', ['nombre', 'avatarUrl'], [db.adminProfile]);
+    await insertRows(connection, 'adminProfile', ['nombre', 'avatarUrl', 'autoCreateWhatsappLeads'], [db.adminProfile]);
 
     await insertRows(
       connection,
       'users',
-      ['id', 'nombre', 'email', 'password', 'codigoPropio', 'referidoPor', 'fechaRegistro', 'workspaceId', 'role', 'avatarUrl'],
+      ['id', 'nombre', 'email', 'password', 'codigoPropio', 'referidoPor', 'fechaRegistro', 'workspaceId', 'role', 'avatarUrl', 'autoCreateWhatsappLeads'],
       db.users.map((user) => ({
         id: user.id ?? null,
         nombre: user.nombre ?? '',
@@ -600,6 +641,7 @@ export async function writeDb(nextDb) {
         workspaceId: user.workspaceId ?? '',
         role: user.role ?? '',
         avatarUrl: user.avatarUrl ?? null,
+        autoCreateWhatsappLeads: Boolean(user.autoCreateWhatsappLeads),
       })),
     );
 

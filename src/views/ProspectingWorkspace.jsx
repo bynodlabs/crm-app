@@ -589,13 +589,16 @@ const EMOJI_GROUPS = [
   },
 ];
 
-function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationActivity, onOpenLeadDetails, contactOptions = [], workspaceId = '' }) {
+function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, language = 'es', onConversationActivity, onOpenLeadDetails, contactOptions = [], workspaceId = '' }) {
+  const { sectors } = useSectors({ records: activeLead ? [activeLead] : [] });
   const [chatDraft, setChatDraft] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [isLoadingChat, setIsLoadingChat] = useState(false);
   const [isSendingChat, setIsSendingChat] = useState(false);
   const [chatError, setChatError] = useState('');
   const [chatConnection, setChatConnection] = useState(null);
+  const [isChatStreamDegraded, setIsChatStreamDegraded] = useState(false);
+  const [persistedChatSummary, setPersistedChatSummary] = useState('');
   const [pendingAttachment, setPendingAttachment] = useState(null);
   const [isAttachmentMenuOpen, setIsAttachmentMenuOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
@@ -617,6 +620,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
   const [chatSearchTerm, setChatSearchTerm] = useState('');
   const [isChatSearchOpen, setIsChatSearchOpen] = useState(false);
   const [isChatHeaderMenuOpen, setIsChatHeaderMenuOpen] = useState(false);
+  const [isChatSummaryOpen, setIsChatSummaryOpen] = useState(false);
   const [forwardingMessage, setForwardingMessage] = useState(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
   const [isPreparingAudio, setIsPreparingAudio] = useState(false);
@@ -691,6 +695,88 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
       || String(message.contact?.phoneNumber || '').toLowerCase().includes(normalizedSearch)
     ));
   }, [chatMessages, chatSearchTerm, t]);
+  const isChatConnected = chatConnection?.status === 'open';
+  const isChatReadOnly = Boolean(activeChatJid) && !isChatConnected;
+  const isComposerDisabled = !activeChatJid || isSendingChat || isChatReadOnly;
+  const chatSummary = useMemo(() => {
+    const historyEntries = Array.isArray(activeLead?.historial) ? activeLead.historial : [];
+    const latestMessage = chatMessages.length > 0 ? chatMessages[chatMessages.length - 1] : null;
+    const inboundMessages = chatMessages.filter((message) => !message?.fromMe).length;
+    const outboundMessages = chatMessages.filter((message) => message?.fromMe).length;
+    const latestHistory = historyEntries.length > 0 ? historyEntries[0] : null;
+    const summaryLines = [];
+    const recentMessages = chatMessages.slice(-8);
+    const latestMessageText = latestMessage ? getMessagePreviewText(latestMessage, t) : '';
+    const latestHistoryText = String(latestHistory?.accion || '');
+    const combinedSignals = `${latestMessageText} ${latestHistoryText} ${activeLead?.nota || ''}`.toLowerCase();
+    const recentSignalText = recentMessages
+      .map((message) => getMessagePreviewText(message, t))
+      .join(' || ')
+      .toLowerCase();
+    let toneLabel = t('ws_chat_summary_tone_cold');
+    let nextStepLabel = t('ws_chat_summary_next_step_default');
+    const agreementItems = [];
+    const objectionItems = [];
+
+    if (/(agendar|agenda|zoom|llamada|ma[nñ]ana|hoy|listo|confirmado|va bien|perfecto)/.test(recentSignalText)) {
+      agreementItems.push(t('ws_chat_summary_agreement_followup'));
+    }
+
+    if (/(precio|plan|costo|inversi[oó]n|pago)/.test(recentSignalText)) {
+      agreementItems.push(t('ws_chat_summary_agreement_pricing'));
+    }
+
+    if (/(duda|no se|despu[eé]s|luego|tiempo|ocupad|pensarlo|revisar)/.test(recentSignalText)) {
+      objectionItems.push(t('ws_chat_summary_objection_timing'));
+    }
+
+    if (/(caro|precio|costo|inversi[oó]n|presupuesto)/.test(recentSignalText)) {
+      objectionItems.push(t('ws_chat_summary_objection_budget'));
+    }
+
+    if (activeLead?.sector) {
+      summaryLines.push(`${t('common_sector')}: ${getSectorLabel(language, activeLead.sector, sectors)}`);
+    }
+
+    if (activeLead?.origen) {
+      summaryLines.push(`${t('ws_origin')}: ${activeLead.origen}`);
+    }
+
+    if (activeLead?.nota) {
+      summaryLines.push(activeLead.nota);
+    }
+
+    if (latestHistory?.accion) {
+      summaryLines.push(latestHistory.accion);
+    }
+
+    if (/(interes|listo|agendar|agenda|zoom|llamada|quiero|me interesa|precio|plan)/.test(combinedSignals)) {
+      toneLabel = t('ws_chat_summary_tone_warm');
+      nextStepLabel = t('ws_chat_summary_next_step_followup');
+    } else if (/(duda|revisar|despu[eé]s|luego|pendiente|cotiz|informaci[oó]n)/.test(combinedSignals)) {
+      toneLabel = t('ws_chat_summary_tone_nurture');
+      nextStepLabel = t('ws_chat_summary_next_step_nurture');
+    }
+
+    return {
+      latestMessage,
+      inboundMessages,
+      outboundMessages,
+      latestHistory,
+      historyEntries,
+      summaryLines: summaryLines.slice(0, 3),
+      toneLabel,
+      nextStepLabel,
+      agreementItems: agreementItems.slice(0, 2),
+      objectionItems: objectionItems.slice(0, 2),
+      storyText: persistedChatSummary || [
+        latestHistory?.accion || '',
+        agreementItems[0] || '',
+        objectionItems[0] || '',
+        nextStepLabel,
+      ].filter(Boolean).join(' '),
+    };
+  }, [activeLead?.historial, activeLead?.nota, activeLead?.origen, activeLead?.sector, chatMessages, language, persistedChatSummary, sectors, t]);
 
   const filteredEmojis = useMemo(() => {
     const normalizedSearch = emojiSearch.trim().toLowerCase();
@@ -764,6 +850,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
     setChatSearchTerm('');
     setIsChatSearchOpen(false);
     setIsChatHeaderMenuOpen(false);
+    setIsChatSummaryOpen(false);
     setForwardingMessage(null);
     setContactPickerMode('share-contact');
   }, [activeLead?.id]);
@@ -845,12 +932,13 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
     const handlePointerDown = (event) => {
       if (chatHeaderMenuRef.current?.contains(event.target)) return;
       setIsChatHeaderMenuOpen(false);
+      setIsChatSummaryOpen(false);
     };
 
-    if (!isChatHeaderMenuOpen) return undefined;
+    if (!isChatHeaderMenuOpen && !isChatSummaryOpen) return undefined;
     window.addEventListener('pointerdown', handlePointerDown);
     return () => window.removeEventListener('pointerdown', handlePointerDown);
-  }, [isChatHeaderMenuOpen]);
+  }, [isChatHeaderMenuOpen, isChatSummaryOpen]);
 
   useEffect(() => {
     const trimmed = chatDraft.trimStart();
@@ -875,6 +963,8 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
       setChatMessages([]);
       setChatError('');
       setChatConnection(null);
+      setIsChatStreamDegraded(false);
+      setPersistedChatSummary('');
       setIsLoadingChat(false);
       return undefined;
     }
@@ -883,12 +973,15 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
       setChatMessages([]);
       setChatError(t('ws_chat_no_phone'));
       setChatConnection(null);
+      setIsChatStreamDegraded(false);
+      setPersistedChatSummary('');
       setIsLoadingChat(false);
       return undefined;
     }
 
     setIsLoadingChat(true);
     setChatError('');
+    setIsChatStreamDegraded(false);
 
     api.getWhatsAppChatMessages(activeChatJid)
       .then((response) => {
@@ -915,7 +1008,30 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
     return () => {
       cancelled = true;
     };
-  }, [activeChatJid, activeLead, t]);
+  }, [activeChatJid, activeLead?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!activeLead || !activeChatJid) {
+      setPersistedChatSummary('');
+      return undefined;
+    }
+
+    api.getWhatsAppChatSummary(activeChatJid)
+      .then((response) => {
+        if (cancelled) return;
+        setPersistedChatSummary(String(response?.item?.summary || ''));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPersistedChatSummary('');
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChatJid, activeLead?.id]);
 
   useEffect(() => {
     if (!activeChatJid) return undefined;
@@ -927,6 +1043,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
         const payload = JSON.parse(event.data || '{}');
         setChatConnection(payload?.connection || null);
         setChatError('');
+        setIsChatStreamDegraded(false);
       } catch {
         // ignore malformed stream payloads
       }
@@ -948,6 +1065,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
       try {
         const payload = JSON.parse(event.data || '{}');
         setChatConnection(payload?.connection || null);
+        setIsChatStreamDegraded(false);
       } catch {
         // ignore malformed stream payloads
       }
@@ -964,7 +1082,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
     };
 
     const handleError = () => {
-      setChatError((current) => current || t('ws_chat_stream_waiting'));
+      setIsChatStreamDegraded(true);
     };
 
     stream.addEventListener('ready', handleReady);
@@ -995,7 +1113,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
 
     const nextText = chatDraft.trim();
     const nextAttachment = pendingAttachment;
-    if (!activeChatJid || (!nextText && !nextAttachment) || isSendingChat) return;
+    if (!activeChatJid || (!nextText && !nextAttachment) || isSendingChat || isChatReadOnly) return;
 
     setIsSendingChat(true);
     setChatError('');
@@ -1051,7 +1169,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
   };
 
   const sendAudioAttachment = async (nextAudio, fallbackText = '') => {
-    if (!activeChatJid || !nextAudio || isSendingChat) return false;
+    if (!activeChatJid || !nextAudio || isSendingChat || isChatReadOnly) return false;
 
     setIsSendingChat(true);
     setChatError('');
@@ -1670,7 +1788,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
               <p className={`truncate pt-0.5 text-[12px] ${panelTheme.subtitle}`}>
                 {activeLead
                   ? `${activeLead.numero || activeLead.correo || t('ws_no_contact')} · ${
-                    chatConnection?.status === 'open' ? t('ws_chat_connected') : t('ws_chat_waiting')
+                    isChatConnected ? t('ws_chat_connected') : t('ws_chat_waiting')
                   }`
                   : ''}
               </p>
@@ -1684,12 +1802,132 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
           </button>
           <button
             type="button"
-            onClick={() => setIsChatHeaderMenuOpen((current) => !current)}
+            onClick={() => {
+              setIsChatSummaryOpen((current) => !current);
+              setIsChatHeaderMenuOpen(false);
+            }}
+            className={`rounded-full px-3 py-2.5 text-[12px] font-semibold transition-colors ${isChatSummaryOpen ? 'bg-[#ff7a1a]/12 text-[#ff7a1a]' : panelTheme.actions}`}
+            aria-label={t('common_summary')}
+          >
+            <span className="flex items-center gap-1.5">
+              <FileText size={15} strokeWidth={2} />
+              <span>{t('common_summary')}</span>
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsChatHeaderMenuOpen((current) => !current);
+              setIsChatSummaryOpen(false);
+            }}
             className={`rounded-full p-2.5 transition-colors ${isChatHeaderMenuOpen ? 'bg-[#ff7a1a]/12 text-[#ff7a1a]' : panelTheme.actions}`}
             aria-label="More options"
           >
             <MoreVertical size={17} strokeWidth={2} />
           </button>
+          {isChatSummaryOpen && activeLead && (
+            <div className={`absolute right-[3.8rem] top-[calc(100%+0.55rem)] z-30 w-[22rem] overflow-hidden rounded-[1.6rem] border border-[#ff7a1a]/15 px-4 py-4 shadow-[0_30px_70px_-38px_rgba(255,122,26,0.45)] ${isDarkMode ? 'bg-[linear-gradient(180deg,rgba(17,22,28,0.96),rgba(10,13,18,0.98))] backdrop-blur-[26px]' : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,248,242,0.96))] backdrop-blur-[26px]'}`}>
+              <div className={`absolute inset-x-0 top-0 h-20 ${isDarkMode ? 'bg-[radial-gradient(circle_at_top,rgba(255,122,26,0.16),transparent_70%)]' : 'bg-[radial-gradient(circle_at_top,rgba(255,122,26,0.14),transparent_72%)]'}`}></div>
+              <div className="relative flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full ${isDarkMode ? 'bg-[#ff7a1a]/16 text-[#ff9b55]' : 'bg-[#ff7a1a]/12 text-[#ff7a1a]'}`}>
+                      <Bot size={16} strokeWidth={2} />
+                    </span>
+                    <p className={`text-[15px] font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                      {t('common_summary')}
+                    </p>
+                  </div>
+                  <p className={`mt-2 text-[12px] leading-5 ${panelTheme.subtitle}`}>{t('ws_chat_summary_placeholder')}</p>
+                </div>
+                <div className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${isDarkMode ? 'bg-white/10 text-slate-200' : 'bg-slate-100 text-slate-600'}`}>
+                  {t('ws_chat_summary_live')}
+                </div>
+              </div>
+
+              <div className={`relative mt-4 overflow-hidden rounded-[1.25rem] border px-3.5 py-3 ${isDarkMode ? 'border-white/10 bg-white/[0.045]' : 'border-white/90 bg-white/70'}`}>
+                <div className={`absolute -right-6 -top-6 h-20 w-20 rounded-full blur-2xl ${isDarkMode ? 'bg-[#ff7a1a]/12' : 'bg-[#ff7a1a]/10'}`}></div>
+                <div className="relative flex items-center justify-between gap-3">
+                  <div>
+                    <p className={`text-[11px] uppercase tracking-[0.14em] ${panelTheme.subtitle}`}>{t('ws_chat_summary_signal')}</p>
+                    <p className={`mt-1 text-[16px] font-semibold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>{chatSummary.toneLabel}</p>
+                  </div>
+                  <div className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${isDarkMode ? 'bg-emerald-500/12 text-emerald-300' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {t('ws_chat_summary_live')}
+                  </div>
+                </div>
+                <p className={`relative mt-2 text-[12px] leading-5 ${panelTheme.subtitle}`}>{chatSummary.nextStepLabel}</p>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <div className={`rounded-[1rem] px-3.5 py-3.5 ${isDarkMode ? 'bg-white/5' : 'bg-slate-50/90'}`}>
+                  <div className="flex items-center gap-2">
+                    <FileText size={14} className={isDarkMode ? 'text-[#ff9b55]' : 'text-[#ff7a1a]'} />
+                    <p className={`text-[11px] uppercase tracking-[0.12em] ${panelTheme.subtitle}`}>{t('ws_chat_summary_story')}</p>
+                  </div>
+                  <p className={`mt-2 text-[13px] leading-6 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                    {chatSummary.storyText || t('ws_chat_summary_pending')}
+                  </p>
+                  {(chatSummary.latestMessage?.timestamp || chatSummary.latestHistory?.fecha) && (
+                    <p className={`mt-2 text-[11px] ${panelTheme.subtitle}`}>
+                      {formatChatDayLabel(chatSummary.latestMessage?.timestamp || chatSummary.latestHistory?.fecha, locale, t)} · {formatChatTimestamp(chatSummary.latestMessage?.timestamp || chatSummary.latestHistory?.fecha, locale)}
+                    </p>
+                  )}
+                </div>
+
+                <div className={`rounded-[1rem] px-3 py-3 ${isDarkMode ? 'bg-white/5' : 'bg-slate-50/90'}`}>
+                  <p className={`text-[11px] uppercase tracking-[0.12em] ${panelTheme.subtitle}`}>{t('ws_chat_summary_agreements')}</p>
+                  {chatSummary.agreementItems.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {chatSummary.agreementItems.map((item, index) => (
+                        <p key={`${item}-${index}`} className={`text-[13px] leading-5 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                          {item}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={`mt-2 text-[13px] leading-5 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                      {t('ws_chat_summary_agreements_empty')}
+                    </p>
+                  )}
+                </div>
+
+                <div className={`rounded-[1rem] px-3 py-3 ${isDarkMode ? 'bg-white/5' : 'bg-slate-50/90'}`}>
+                  <p className={`text-[11px] uppercase tracking-[0.12em] ${panelTheme.subtitle}`}>{t('ws_chat_summary_objections')}</p>
+                  {chatSummary.objectionItems.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {chatSummary.objectionItems.map((item, index) => (
+                        <p key={`${item}-${index}`} className={`text-[13px] leading-5 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                          {item}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={`mt-2 text-[13px] leading-5 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                      {t('ws_chat_summary_objections_empty')}
+                    </p>
+                  )}
+                </div>
+
+                <div className={`rounded-[1rem] px-3 py-3 ${isDarkMode ? 'bg-white/5' : 'bg-slate-50/90'}`}>
+                  <p className={`text-[11px] uppercase tracking-[0.12em] ${panelTheme.subtitle}`}>{t('ws_chat_summary_context')}</p>
+                  {chatSummary.summaryLines.length > 0 ? (
+                    <div className="mt-2 space-y-2">
+                      {chatSummary.summaryLines.map((line, index) => (
+                        <p key={`${line}-${index}`} className={`text-[13px] leading-5 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                          {line}
+                        </p>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={`mt-1 text-[13px] leading-5 ${isDarkMode ? 'text-slate-100' : 'text-slate-700'}`}>
+                      {t('ws_chat_summary_pending')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {isChatHeaderMenuOpen && activeLead && (
             <div className={`absolute right-0 top-[calc(100%+0.55rem)] z-30 w-[13.5rem] overflow-hidden rounded-[1.4rem] px-2 py-2 ${glassPanelClass}`}>
               <button
@@ -1720,6 +1958,14 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
         }}
       >
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-white/[0.03] via-transparent to-black/[0.03]"></div>
+
+        {isChatStreamDegraded && activeLead && (
+          <div className="sticky top-3 z-[3] mx-auto mb-4 flex max-w-[30rem] justify-center px-3">
+            <div className={`pointer-events-none w-full rounded-[1.25rem] border px-4 py-3 text-center text-[12px] font-medium shadow-[0_18px_40px_-24px_rgba(15,23,42,0.22)] backdrop-blur-xl ${isDarkMode ? 'border-white/10 bg-white/10 text-slate-100' : 'border-white/80 bg-white/55 text-slate-700'}`}>
+              {t('ws_chat_stream_waiting')}
+            </div>
+          </div>
+        )}
 
         {(isLoadingChat || chatError || shouldShowChatEmptyState) && (
           <div className="pointer-events-none absolute inset-0 z-[1] flex items-center justify-center px-6">
@@ -1912,6 +2158,18 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
         />
 
         <div className="mx-auto max-w-[46rem] space-y-3">
+          {isChatReadOnly && (
+            <div className={`rounded-[1.3rem] border px-4 py-3 text-sm ${isDarkMode ? 'border-amber-400/20 bg-amber-500/10 text-amber-100' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+              <div className="flex items-start gap-3">
+                <Lock size={16} className="mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold">{t('ws_chat_readonly')}</p>
+                  <p className={`mt-1 ${isDarkMode ? 'text-amber-100/80' : 'text-amber-700'}`}>{t('ws_chat_reconnect_to_send')}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {isCatalogOpen && (
             <div ref={catalogRef} className={`rounded-[1.8rem] p-4 ${glassPanelClass} ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
               <div className="mb-3 flex items-center justify-between gap-3">
@@ -2177,6 +2435,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
                         key={option.id}
                         type="button"
                         onClick={() => handlePickAttachmentOption(option.id)}
+                        disabled={isChatReadOnly}
                         className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-colors ${isDarkMode ? 'text-white' : 'text-slate-900'} ${glassHoverClass}`}
                       >
                         <OptionIcon size={20} className={option.iconClass} />
@@ -2187,7 +2446,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
                 </div>
               )}
             </div>
-            <button type="button" onClick={() => { setIsEmojiPickerOpen((current) => !current); setIsAttachmentMenuOpen(false); setIsContactPickerOpen(false); setIsQuickRepliesOpen(false); setIsCatalogOpen(false); }} className={`rounded-full p-2.5 transition-colors ${isEmojiPickerOpen ? 'bg-[#ff7a1a]/12 text-[#ff7a1a]' : panelTheme.actions}`} aria-label="Emoji picker">
+            <button type="button" disabled={isChatReadOnly} onClick={() => { setIsEmojiPickerOpen((current) => !current); setIsAttachmentMenuOpen(false); setIsContactPickerOpen(false); setIsQuickRepliesOpen(false); setIsCatalogOpen(false); }} className={`rounded-full p-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${isEmojiPickerOpen ? 'bg-[#ff7a1a]/12 text-[#ff7a1a]' : panelTheme.actions}`} aria-label="Emoji picker">
               <DonRafaelReactionIcon
                 className={`h-[18px] w-[18px] transition-all ${isEmojiPickerOpen ? 'text-[#ff7a1a] opacity-95' : isDarkMode ? 'text-[#8696a0] opacity-85' : 'text-[#667781] opacity-85'}`}
               />
@@ -2231,15 +2490,15 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, onConversationA
               value={chatDraft}
               onChange={(e) => setChatDraft(e.target.value)}
               onKeyDown={handleChatDraftKeyDown}
-              placeholder={t('ws_chat_placeholder')}
-              disabled={!activeChatJid || isSendingChat || isRecordingAudio}
+              placeholder={isChatReadOnly ? t('ws_chat_reconnect_to_send') : t('ws_chat_placeholder')}
+              disabled={isComposerDisabled || isRecordingAudio}
               rows={1}
               className={`min-h-[1.75rem] max-h-[7.5rem] min-w-0 resize-none border-0 py-1.5 text-[15px] font-normal leading-6 outline-none focus:ring-0 ${panelTheme.composerInput}`}
             />
           </div>
           <button
             type="submit"
-            disabled={!activeChatJid || isSendingChat || isPreparingAudio}
+            disabled={isComposerDisabled || isPreparingAudio}
             className={`flex h-12 w-12 items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               chatDraft.trim() || pendingAttachment
                 ? 'bg-[#ff7a1a] text-white shadow-[0_14px_28px_-18px_rgba(255,122,26,0.85)] hover:bg-[#ff8f3f]'
@@ -2280,6 +2539,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
   const autoCreateInboxPhonesRef = useRef(new Set());
   const locale = LANG_LOCALES[language] || LANG_LOCALES.en;
   const workspaceId = currentUser?.workspaceId || '';
+  const canAutoCreateWhatsappLeads = Boolean(currentUser?.autoCreateWhatsappLeads) && waChatsConnection?.status === 'open';
   const openedInboxStorageKey = workspaceId ? `crm-wa-opened-chats:${workspaceId}` : '';
   const MIN_LEFT_PANEL_WIDTH = 320;
   const MAX_LEFT_PANEL_WIDTH = 520;
@@ -2452,6 +2712,36 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
     return map;
   }, [ownerScopedRecords]);
 
+  const bigDataThreads = useMemo(() => {
+    return ownerScopedRecords
+      .filter((record) => record.inProspecting)
+      .map((record) => ({
+        ...record,
+        id: record.id,
+        nombre: getPreferredInboxName({
+          leadName: record.nombre || '',
+          chatName: '',
+          phoneNumber: record.numero || '',
+          email: record.correo || '',
+          fallbackText: t('ws_no_contact'),
+        }),
+        __chatJid: normalizeChatContactJid(record.numero || ''),
+        __chatName: '',
+        __lastMessageText: record.__lastMessageText || '',
+        __lastMessageTimestamp: record.__lastMessageTimestamp || 0,
+        __lastMessageDirection: record.__lastMessageDirection || 'in',
+        __unreadCount: Number(record.__unreadCount || 0),
+        __avatarUrl: record.__avatarUrl || '',
+        __isKnownLead: true,
+        __isInboxUnknown: false,
+      }))
+      .sort((left, right) => {
+        const rightTime = new Date(right.__lastMessageTimestamp || getLatestInboxActivity(right)?.fecha || right.fechaIngreso || 0).getTime();
+        const leftTime = new Date(left.__lastMessageTimestamp || getLatestInboxActivity(left)?.fecha || left.fechaIngreso || 0).getTime();
+        return rightTime - leftTime;
+      });
+  }, [ownerScopedRecords, t]);
+
   const inboxThreads = useMemo(() => {
     return whatsAppChats.map((chat) => {
       const phoneKey = getCleanWhatsAppNumber(chat.phoneNumber || '');
@@ -2497,7 +2787,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
   }, [ownerId, ownerName, recordsByPhone, t, whatsAppChats]);
 
   useEffect(() => {
-    if (isViewOnly || typeof onCreateRecord !== 'function') return;
+    if (isViewOnly || typeof onCreateRecord !== 'function' || !canAutoCreateWhatsappLeads) return;
 
     inboxThreads.forEach((thread) => {
       if (!thread.__isInboxUnknown) return;
@@ -2543,7 +2833,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
           autoCreateInboxPhonesRef.current.delete(cleanPhone);
         });
     });
-  }, [inboxThreads, isViewOnly, onCreateRecord, ownerId, ownerName, recordsByPhone, t]);
+  }, [canAutoCreateWhatsappLeads, inboxThreads, isViewOnly, onCreateRecord, ownerId, ownerName, recordsByPhone, t]);
 
   const currentList = useMemo(() => (
     workspaceTab === 'active'
@@ -2560,13 +2850,30 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
       snippet.includes(normalizedSearch)
     );
   }), [inboxThreads, normalizedSearch, searchTerm, workspaceTab]);
+
+  const bigDataList = useMemo(() => (
+    workspaceTab === 'active'
+      ? bigDataThreads.filter((thread) => !isArchivedLead(thread))
+      : bigDataThreads.filter((thread) => isArchivedLead(thread))
+  ).filter((thread) => {
+    if (!normalizedSearch) return true;
+
+    const snippet = String(getInboxSnippet(thread, t) || '').toLowerCase();
+    return (
+      String(thread.nombre || '').toLowerCase().includes(normalizedSearch) ||
+      String(thread.numero || '').includes(searchTerm) ||
+      String(thread.correo || '').toLowerCase().includes(normalizedSearch) ||
+      snippet.includes(normalizedSearch)
+    );
+  }), [bigDataThreads, normalizedSearch, searchTerm, t, workspaceTab]);
+
   const filteredInboxList = useMemo(() => {
     if (inboxFilter === 'bigdata') {
-      return currentList.filter((record) => !record.__isInboxUnknown);
+      return bigDataList;
     }
 
     return currentList;
-  }, [currentList, inboxFilter]);
+  }, [bigDataList, currentList, inboxFilter]);
   const resolvedActiveLeadId = filteredInboxList.some((record) => record.id === activeLeadId)
     ? activeLeadId
     : (filteredInboxList[0]?.id || currentList[0]?.id || null);
@@ -2575,12 +2882,16 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
     [ownerId, ownerName, records],
   );
   const activeInboxCount = useMemo(
-    () => inboxThreads.filter((thread) => !thread.__isKnownLead || !isArchivedLead(thread)).length,
-    [inboxThreads],
+    () => (inboxFilter === 'bigdata'
+      ? bigDataThreads.filter((thread) => !isArchivedLead(thread)).length
+      : inboxThreads.filter((thread) => !thread.__isKnownLead || !isArchivedLead(thread)).length),
+    [bigDataThreads, inboxFilter, inboxThreads],
   );
   const archivedInboxCount = useMemo(
-    () => inboxThreads.filter((thread) => thread.__isKnownLead && isArchivedLead(thread)).length,
-    [inboxThreads],
+    () => (inboxFilter === 'bigdata'
+      ? bigDataThreads.filter((thread) => isArchivedLead(thread)).length
+      : inboxThreads.filter((thread) => thread.__isKnownLead && isArchivedLead(thread)).length),
+    [bigDataThreads, inboxFilter, inboxThreads],
   );
 
   const leadsWorked = useMemo(() => {
@@ -2617,6 +2928,29 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
       setShowLeadDetails(false);
     }
   }, [activeLead, showLeadDetails]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const raw = window.sessionStorage.getItem('crm-workspace-target-conversation');
+      if (!raw) return;
+
+      const target = JSON.parse(raw);
+      if (target?.inboxFilter) {
+        setInboxFilter(target.inboxFilter);
+      }
+      if (target?.workspaceTab) {
+        setWorkspaceTab(target.workspaceTab);
+      }
+      if (target?.leadId) {
+        setActiveLeadId(target.leadId);
+      }
+      window.sessionStorage.removeItem('crm-workspace-target-conversation');
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   useEffect(() => {
     if (!isResizingPanels) return undefined;
@@ -3042,7 +3376,7 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
         <div className={`pointer-events-none absolute left-1/2 top-1/2 flex h-16 w-2.5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border transition-all ${isResizingPanels ? 'border-[#FF5A1F]/30 bg-white shadow-[0_8px_24px_-12px_rgba(255,90,31,0.35)]' : 'border-slate-200/80 bg-white/90 shadow-[0_6px_18px_-14px_rgba(15,23,42,0.2)] group-hover:border-[#FF5A1F]/20 group-hover:bg-white'}`}></div>
       </div>
 
-      <WorkspaceChatPanel activeLead={activeLead} isDarkMode={isDarkMode} t={t} locale={locale} onConversationActivity={handleConversationActivity} onOpenLeadDetails={handleOpenLeadDetails} contactOptions={workspaceContactOptions} workspaceId={workspaceId} />
+      <WorkspaceChatPanel activeLead={activeLead} isDarkMode={isDarkMode} t={t} locale={locale} language={language} onConversationActivity={handleConversationActivity} onOpenLeadDetails={handleOpenLeadDetails} contactOptions={workspaceContactOptions} workspaceId={workspaceId} />
 
       {showAIModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">

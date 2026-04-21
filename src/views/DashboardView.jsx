@@ -1,36 +1,49 @@
 import { useMemo, useState } from 'react';
-import { Plus, Search, User, Users, X } from 'lucide-react';
+import { Pencil, Plus, Search, User, Users, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { RecordCard } from '../components/RecordCard';
-import { SECTORES } from '../lib/constants';
-import { getSectorByCode, getSectorLabel } from '../lib/sector-utils';
+import { getSectorByCode, getSectorLabel, normalizeSectorCode } from '../lib/sector-utils';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
 import { translateSector } from '../lib/i18n';
 import { useSectors } from '../hooks/useSectors';
 
-const DEFAULT_DASHBOARD_SECTOR_IDS = SECTORES.slice(0, -1).map((sector) => sector.id);
-const DEFAULT_SECTOR_IDS = new Set(SECTORES.map((sector) => sector.id));
 const DEFAULT_CUSTOM_SECTOR_COLOR = 'from-sky-400 to-indigo-500';
+const TOTAL_SECTOR_SLOTS = 10;
+const SECTOR_EMOJI_GROUPS = [
+  {
+    id: 'business',
+    labelKey: 'dash_sector_emoji_business',
+    items: ['💼', '📈', '🏢', '🧠', '🚀', '💬', '📞', '🎯'],
+  },
+  {
+    id: 'energy',
+    labelKey: 'dash_sector_emoji_energy',
+    items: ['✨', '🔥', '⚡', '🌟', '🎉', '💡', '✅', '🙌'],
+  },
+  {
+    id: 'lifestyle',
+    labelKey: 'dash_sector_emoji_lifestyle',
+    items: ['🏠', '❤️', '🌿', '☕', '🍀', '🛍️', '🍽️', '🎨'],
+  },
+];
 
 export function DashboardView({ records, allRecords = records, onSelectRecord, dashboardSectorFilter = 'ALL', setDashboardSectorFilter, setActiveTab, myAgents, t, currentUser, language = 'es', isDarkMode = false }) {
-  const { sectors, activeSectors, createSector, deleteSector } = useSectors();
+  const dashboardBaseRecords = allRecords;
+  const { sectors, activeSectors, createSector, updateSector, deleteSector } = useSectors({ records: dashboardBaseRecords });
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateSectorOpen, setIsCreateSectorOpen] = useState(false);
   const [customSectorTitle, setCustomSectorTitle] = useState('');
   const [customSectorEmoji, setCustomSectorEmoji] = useState('✨');
+  const [editingSectorId, setEditingSectorId] = useState('');
+  const [editingSectorSortOrder, setEditingSectorSortOrder] = useState(0);
   const [sectorActionState, setSectorActionState] = useState({ status: 'idle', message: '' });
-  const dashboardBaseRecords = allRecords;
   const globalTotalRecords = dashboardBaseRecords.length;
 
   const resolveSectorId = (sectorValue) => {
-    const safeValue = String(sectorValue || '').trim();
-    if (!safeValue) return 'UNKNOWN';
+    const safeValue = normalizeSectorCode(sectorValue);
 
     const directMatch = getSectorByCode(sectors, safeValue);
     if (directMatch) return directMatch.id;
-
-    const defaultMatch = SECTORES.find((sector) => sector.id === safeValue);
-    if (defaultMatch) return defaultMatch.id;
 
     const normalizedValue = safeValue.toLowerCase();
     const namedMatch = sectors.find((sector) => {
@@ -54,16 +67,41 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
     (r.numero && r.numero.includes(searchTerm))
   );
 
-  const dashboardSectors = useMemo(() => {
-    const activeById = new Map(activeSectors.map((sector) => [sector.id, sector]));
-    const defaults = DEFAULT_DASHBOARD_SECTOR_IDS.map((sectorId) => activeById.get(sectorId)).filter(Boolean);
-    const custom = activeSectors.find((sector) => !DEFAULT_SECTOR_IDS.has(sector.id));
-    return { defaults, custom };
+  const dashboardSectorSlots = useMemo(() => {
+    const orderedSectors = [...activeSectors]
+      .sort((a, b) => (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0))
+      .slice(0, TOTAL_SECTOR_SLOTS);
+    const bySortOrder = new Map(orderedSectors.map((sector) => [Number(sector.sortOrder) || 0, sector]));
+
+    return Array.from({ length: TOTAL_SECTOR_SLOTS }, (_, index) => ({
+      slotOrder: index,
+      sector: bySortOrder.get(index) || null,
+    }));
   }, [activeSectors]);
 
-  const handleOpenCreateSector = () => {
+  const resetSectorEditor = () => {
     setCustomSectorTitle('');
     setCustomSectorEmoji('✨');
+    setEditingSectorId('');
+    setEditingSectorSortOrder(0);
+    setSectorActionState({ status: 'idle', message: '' });
+  };
+
+  const handleOpenCreateSector = (slotOrder = 0) => {
+    resetSectorEditor();
+    setEditingSectorSortOrder(slotOrder);
+    setIsCreateSectorOpen(true);
+  };
+
+  const handleOpenEditSector = (event, sector) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!sector?.entityId) return;
+
+    setCustomSectorTitle(String(sector.nombre || sector.name || '').trim());
+    setCustomSectorEmoji(String(sector.icon || '').trim() || '✨');
+    setEditingSectorId(sector.entityId);
+    setEditingSectorSortOrder(Number(sector.sortOrder) || 0);
     setSectorActionState({ status: 'idle', message: '' });
     setIsCreateSectorOpen(true);
   };
@@ -78,23 +116,29 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
     setSectorActionState({ status: 'saving', message: '' });
 
     try {
-      const result = await createSector({
+      const payload = {
         name: safeTitle,
         icon: String(customSectorEmoji || '').trim() || '✨',
         color: DEFAULT_CUSTOM_SECTOR_COLOR,
-      });
+        sortOrder: editingSectorSortOrder,
+      };
+      const result = editingSectorId
+        ? await updateSector(editingSectorId, { ...payload, isActive: true })
+        : await createSector(payload);
       setSectorActionState({
         status: 'success',
-        message: result?.source === 'local' ? 'Sector creado localmente.' : 'Sector creado.',
+        message: editingSectorId
+          ? (result?.source === 'local' ? 'Sector actualizado localmente.' : 'Sector actualizado.')
+          : (result?.source === 'local' ? 'Sector creado localmente.' : 'Sector creado.'),
       });
       setIsCreateSectorOpen(false);
       setDashboardSectorFilter?.('ALL');
     } catch (error) {
-      setSectorActionState({ status: 'error', message: error?.message || 'No se pudo crear el sector.' });
+      setSectorActionState({ status: 'error', message: error?.message || 'No se pudo guardar el sector.' });
     }
   };
 
-  const handleDeleteCustomSector = async (event, sector) => {
+  const handleDeleteSector = async (event, sector) => {
     event.preventDefault();
     event.stopPropagation();
     if (!sector?.entityId) return;
@@ -176,60 +220,37 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
               </div>
               <div className="p-0">
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 xl:gap-x-6 xl:gap-y-1.5">
-                  {dashboardSectors.defaults.map((sec) => {
-                    const isSelected = dashboardSectorFilter === sec.id;
-                    const isDimmed = dashboardSectorFilter !== 'ALL' && dashboardSectorFilter !== sec.id;
-                    const sectorTotal = sectorCounts[sec.id] || 0;
+                  {dashboardSectorSlots.map(({ slotOrder, sector: sec }) => {
+                    if (!sec) {
+                      return (
+                        <button
+                          key={`slot-${slotOrder}`}
+                          type="button"
+                          onClick={() => handleOpenCreateSector(slotOrder)}
+                          className="group relative flex min-h-[114px] min-w-0 flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200"
+                        >
+                          <div className={`relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200 ${
+                            isDarkMode
+                              ? 'border-dashed border-white/18 bg-white/[0.04] group-hover:border-white/30'
+                              : 'border-dashed border-slate-200 bg-slate-50 group-hover:border-slate-300'
+                          }`}>
+                            <div className={`absolute inset-[6px] rounded-full ${isDarkMode ? 'bg-white/[0.03]' : 'bg-white'} transition-transform duration-200`}></div>
+                            <span className="relative z-10 text-slate-400 group-hover:text-[#FF5A1F]"><Plus size={28} /></span>
+                          </div>
+                          <span className={`w-full break-words px-1 text-center text-sm font-bold leading-tight transition-colors duration-200 sm:text-[15px] ${
+                            isDarkMode ? 'text-slate-200 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'
+                          }`}>
+                            Agregar sector
+                          </span>
+                          <span className={`mt-0 text-[11px] font-bold tracking-[0.11em] transition-colors duration-200 ${
+                            isDarkMode ? 'text-slate-300' : 'text-slate-500'
+                          }`}>
+                            &nbsp;
+                          </span>
+                        </button>
+                      );
+                    }
 
-                    return (
-                      <div
-                        key={sec.id}
-                        onClick={() => setDashboardSectorFilter?.(isSelected ? 'ALL' : sec.id)}
-                        className={`group relative flex min-h-[114px] min-w-0 cursor-pointer flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200 ${
-                          isDimmed ? 'opacity-45 saturate-50' : 'opacity-100'
-                        }`}
-                      >
-                        <div className={`
-                          relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200
-                          ${isSelected
-                            ? isDarkMode
-                              ? 'border-white/45 bg-white/[0.09] shadow-[0_0_0_6px_rgba(255,255,255,0.04)]'
-                              : 'border-slate-300 bg-slate-50 shadow-[0_0_0_6px_rgba(148,163,184,0.08)]'
-                            : isDarkMode
-                              ? 'border-white/18 bg-white/[0.04] group-hover:border-white/28'
-                              : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}
-                        `}>
-                          <div className={`absolute inset-[6px] rounded-full bg-gradient-to-br ${sec.color} ${isSelected ? 'opacity-100 scale-100' : 'opacity-95 scale-[0.98]'} transition-transform duration-200`}></div>
-                          <span className="relative z-10 drop-shadow-sm">{sec.icon}</span>
-                        </div>
-                        <span className={`w-full break-words px-1 text-center text-sm font-bold leading-tight transition-colors duration-200 sm:text-[15px] ${
-                          isDarkMode
-                            ? isSelected
-                              ? 'text-white'
-                              : 'text-slate-200 group-hover:text-white'
-                            : isSelected
-                              ? 'text-slate-900'
-                              : 'text-slate-700 group-hover:text-slate-900'
-                        }`}>
-                          {getSectorLabel(language, sec.id, sectors)}
-                        </span>
-                        <span className={`mt-0 text-[11px] font-bold tracking-[0.11em] transition-colors duration-200 ${
-                          isDarkMode
-                            ? isSelected
-                              ? 'text-slate-100'
-                              : 'text-slate-300'
-                            : isSelected
-                              ? 'text-slate-700'
-                              : 'text-slate-500'
-                        }`}>
-                          {sectorTotal} LEADS
-                        </span>
-                      </div>
-                    );
-                  })}
-
-                  {dashboardSectors.custom ? (() => {
-                    const sec = dashboardSectors.custom;
                     const isSelected = dashboardSectorFilter === sec.id;
                     const isDimmed = dashboardSectorFilter !== 'ALL' && dashboardSectorFilter !== sec.id;
                     const sectorTotal = sectorCounts[sec.id] || 0;
@@ -244,7 +265,17 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
                       >
                         <button
                           type="button"
-                          onClick={(event) => handleDeleteCustomSector(event, sec)}
+                          onClick={(event) => handleOpenEditSector(event, sec)}
+                          className={`absolute left-6 top-0 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-white text-slate-400 shadow-sm transition-all hover:border-orange-200 hover:text-[#FF5A1F] ${
+                            isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          }`}
+                          aria-label={`Editar ${sec.nombre}`}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(event) => handleDeleteSector(event, sec)}
                           disabled={sectorActionState.status === 'deleting'}
                           className={`absolute right-6 top-0 z-20 flex h-7 w-7 items-center justify-center rounded-full border bg-white text-slate-400 shadow-sm transition-all hover:border-rose-200 hover:text-rose-500 ${
                             isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
@@ -290,32 +321,7 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
                         </span>
                       </div>
                     );
-                  })() : (
-                    <button
-                      type="button"
-                      onClick={handleOpenCreateSector}
-                      className="group relative flex min-h-[114px] min-w-0 flex-col items-center justify-start px-2 py-0.5 text-center transition-all duration-200"
-                    >
-                      <div className={`relative mb-1.5 flex h-[4.3rem] w-[4.3rem] items-center justify-center rounded-full border text-3xl shadow-sm transition-all duration-200 ${
-                        isDarkMode
-                          ? 'border-dashed border-white/18 bg-white/[0.04] group-hover:border-white/30'
-                          : 'border-dashed border-slate-200 bg-slate-50 group-hover:border-slate-300'
-                      }`}>
-                        <div className={`absolute inset-[6px] rounded-full ${isDarkMode ? 'bg-white/[0.03]' : 'bg-white'} transition-transform duration-200`}></div>
-                        <span className="relative z-10 text-slate-400 group-hover:text-[#FF5A1F]"><Plus size={28} /></span>
-                      </div>
-                      <span className={`w-full break-words px-1 text-center text-sm font-bold leading-tight transition-colors duration-200 sm:text-[15px] ${
-                        isDarkMode ? 'text-slate-200 group-hover:text-white' : 'text-slate-700 group-hover:text-slate-900'
-                      }`}>
-                        Agregar sector
-                      </span>
-                      <span className={`mt-0 text-[11px] font-bold tracking-[0.11em] transition-colors duration-200 ${
-                        isDarkMode ? 'text-slate-300' : 'text-slate-500'
-                      }`}>
-                        PERSONALIZADO
-                      </span>
-                    </button>
-                  )}
+                  })}
                 </div>
               </div>
             </section>
@@ -358,48 +364,109 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
 
       {isCreateSectorOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm" onClick={() => setIsCreateSectorOpen(false)}></div>
-          <div className="relative w-full max-w-sm rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl">
-            <div className="mb-5 flex items-start justify-between gap-4">
+          <div
+            className="absolute inset-0 bg-slate-900/45 backdrop-blur-sm"
+            onClick={() => {
+              setIsCreateSectorOpen(false);
+              resetSectorEditor();
+            }}
+          ></div>
+          <div className="relative max-h-[88vh] w-full max-w-[28rem] overflow-y-auto rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-2xl sm:p-5">
+            <div className="mb-3 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-xl font-black text-slate-900">Nuevo sector</h3>
-                <p className="mt-1 text-sm text-slate-500">Agrega un sector personalizado para usarlo en toda la app.</p>
+                <h3 className="text-lg font-black text-slate-900">{editingSectorId ? 'Editar sector' : 'Nuevo sector'}</h3>
+                <p className="mt-1 max-w-[15rem] text-xs leading-snug text-slate-500">
+                  {editingSectorId ? `Actualiza el contenido del slot ${editingSectorSortOrder + 1}.` : `Configura el slot ${editingSectorSortOrder + 1} con un sector personalizado.`}
+                </p>
               </div>
               <button
                 type="button"
-                onClick={() => setIsCreateSectorOpen(false)}
-                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                onClick={() => {
+                  setIsCreateSectorOpen(false);
+                  resetSectorEditor();
+                }}
+                className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2.5">
               <input
                 type="text"
                 value={customSectorTitle}
                 onChange={(event) => setCustomSectorTitle(event.target.value)}
-                placeholder="Titulo del sector"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100"
+                placeholder={t('dash_sector_title_placeholder')}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[13px] outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100"
               />
-              <input
-                type="text"
-                value={customSectorEmoji}
-                onChange={(event) => setCustomSectorEmoji(event.target.value)}
-                placeholder="Emoji"
-                maxLength={4}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-2xl outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100"
-              />
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+                <div className="mb-2.5 flex items-center justify-between gap-2.5">
+                  <div>
+                    <p className="text-[13px] font-bold text-slate-800">{t('dash_sector_emoji_title')}</p>
+                    <p className="max-w-[12.5rem] text-[11px] leading-snug text-slate-500">{t('dash_sector_emoji_hint')}</p>
+                  </div>
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-xl shadow-sm">
+                    {String(customSectorEmoji || '').trim() || '✨'}
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  {SECTOR_EMOJI_GROUPS.map((group) => (
+                    <div key={group.id}>
+                      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                        {t(group.labelKey)}
+                      </p>
+                      <div className="grid grid-cols-8 gap-1.5">
+                        {group.items.map((emoji) => {
+                          const isSelected = customSectorEmoji === emoji;
+                          return (
+                            <button
+                              key={`${group.id}-${emoji}`}
+                              type="button"
+                              onClick={() => setCustomSectorEmoji(emoji)}
+                              className={`flex h-9 items-center justify-center rounded-lg border text-[21px] transition-all ${
+                                isSelected
+                                  ? 'border-[#FF5A1F] bg-orange-50 shadow-[0_0_0_3px_rgba(255,90,31,0.12)]'
+                                  : 'border-slate-200 bg-white hover:border-orange-200 hover:bg-orange-50/70'
+                              }`}
+                              aria-label={`${t('dash_sector_pick_emoji')} ${emoji}`}
+                            >
+                              {emoji}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-2.5">
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                    {t('dash_sector_custom_emoji')}
+                  </label>
+                  <input
+                    type="text"
+                    value={customSectorEmoji}
+                    onChange={(event) => setCustomSectorEmoji(event.target.value)}
+                    placeholder={t('dash_sector_custom_emoji_placeholder')}
+                    maxLength={8}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-center text-xl outline-none focus:border-[#FF5A1F] focus:ring-2 focus:ring-orange-100"
+                  />
+                </div>
+              </div>
               {sectorActionState.status === 'error' && sectorActionState.message ? (
-                <p className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600">{sectorActionState.message}</p>
+                <p className="rounded-xl bg-rose-50 px-2.5 py-2 text-xs font-bold text-rose-600">{sectorActionState.message}</p>
               ) : null}
             </div>
 
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="mt-4 flex justify-end gap-1.5">
               <button
                 type="button"
-                onClick={() => setIsCreateSectorOpen(false)}
-                className="rounded-xl px-4 py-2.5 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-100"
+                onClick={() => {
+                  setIsCreateSectorOpen(false);
+                  resetSectorEditor();
+                }}
+                className="rounded-lg px-3.5 py-2 text-[13px] font-bold text-slate-500 transition-colors hover:bg-slate-100"
               >
                 {t('common_cancel')}
               </button>
@@ -407,9 +474,9 @@ export function DashboardView({ records, allRecords = records, onSelectRecord, d
                 type="button"
                 onClick={handleCreateCustomSector}
                 disabled={sectorActionState.status === 'saving'}
-                className="rounded-xl bg-[#FF5A1F] px-4 py-2.5 text-sm font-bold text-white shadow-[0_4px_14px_rgba(255,90,31,0.28)] transition-colors hover:bg-[#e6501a]"
+                className="rounded-lg bg-[#FF5A1F] px-3.5 py-2 text-[13px] font-bold text-white shadow-[0_4px_14px_rgba(255,90,31,0.28)] transition-colors hover:bg-[#e6501a]"
               >
-                {sectorActionState.status === 'saving' ? 'Guardando...' : 'Crear'}
+                {sectorActionState.status === 'saving' ? 'Guardando...' : editingSectorId ? 'Guardar' : 'Crear'}
               </button>
             </div>
           </div>

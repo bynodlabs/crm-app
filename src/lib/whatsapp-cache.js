@@ -116,3 +116,20 @@ export function setWhatsAppQrCache(workspaceId, snapshot) {
   qrMemoryCache.set(workspaceId, nextSnapshot);
   writeWorkspaceSnapshot(QR_CACHE_KEY, workspaceId, nextSnapshot);
 }
+
+export function clearWhatsAppQrCache(workspaceId) {
+  if (!workspaceId) return;
+
+  const emptySnapshot = {
+    groups: [],
+    selectedGroup: '',
+    selectedGroupIds: [],
+    selectedGroupMeta: null,
+    participantsByGroup: {},
+    selection: {},
+    updatedAt: Date.now(),
+  };
+
+  qrMemoryCache.set(workspaceId, emptySnapshot);
+  writeWorkspaceSnapshot(QR_CACHE_KEY, workspaceId, emptySnapshot);
+}

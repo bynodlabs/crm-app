@@ -75,9 +75,12 @@ export const userService = {
     };
   },
 
-  async updateProfile({ currentUser, userId, nombre, codigoPropio, avatarUrl }) {
+  async updateProfile({ currentUser, userId, nombre, codigoPropio, avatarUrl, autoCreateWhatsappLeads }) {
     const safeName = String(nombre || '').trim();
     const normalizedAvatarUrl = typeof avatarUrl === 'string' ? avatarUrl.trim() : undefined;
+    const normalizedAutoCreateWhatsappLeads = autoCreateWhatsappLeads === undefined
+      ? undefined
+      : (autoCreateWhatsappLeads === true || autoCreateWhatsappLeads === 1 || autoCreateWhatsappLeads === '1');
 
     if (!currentUser || !safeName) {
       return { status: 400, payload: { error: 'Sesión válida y nombre son obligatorios.' } };
@@ -95,6 +98,7 @@ export const userService = {
         ...(db.adminProfile || {}),
         nombre: safeName,
         ...(normalizedAvatarUrl !== undefined ? { avatarUrl: normalizedAvatarUrl } : {}),
+        ...(normalizedAutoCreateWhatsappLeads !== undefined ? { autoCreateWhatsappLeads: normalizedAutoCreateWhatsappLeads } : {}),
       };
 
       await writeDb(db);
@@ -106,6 +110,7 @@ export const userService = {
             ...currentUser,
             nombre: db.adminProfile.nombre,
             avatarUrl: db.adminProfile.avatarUrl || '',
+            autoCreateWhatsappLeads: Boolean(db.adminProfile.autoCreateWhatsappLeads),
           },
         },
       };
@@ -120,6 +125,9 @@ export const userService = {
     user.nombre = safeName;
     if (normalizedAvatarUrl !== undefined) {
       user.avatarUrl = normalizedAvatarUrl;
+    }
+    if (normalizedAutoCreateWhatsappLeads !== undefined) {
+      user.autoCreateWhatsappLeads = normalizedAutoCreateWhatsappLeads;
     }
 
     await writeDb(db);
