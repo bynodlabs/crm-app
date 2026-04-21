@@ -26,7 +26,6 @@ import { LANG_LOCALES } from '../lib/i18n';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
 import { useSectors } from '../hooks/useSectors';
 
-const DAILY_GOAL_TARGET = 15;
 const DAILY_GOAL_EVENT_TAG = '[META DIARIA]';
 const GENERIC_INBOX_NAMES = new Set(['usuario wa', 'sin nombre', 'usuario ig', 'lead', 'prospecto']);
 const BIGDATA_ORANGE = '#ff7a1a';
@@ -2539,7 +2538,7 @@ function WorkspaceChatPanel({ activeLead, isDarkMode, t, locale, language = 'es'
   );
 }
 
-export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, onAutoSelect, onArchiveRecord, onCreateRecord, waTemplate, setWaTemplate, t, currentUser, language = 'es', isViewOnly, isDarkMode = false }) {
+export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, onAutoSelect, onArchiveRecord, onCreateRecord, waTemplate, setWaTemplate, t, currentUser, language = 'es', isViewOnly, isDarkMode = false, setActiveTab }) {
   const { sectors } = useSectors();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeLeadId, setActiveLeadId] = useState(null);
@@ -2919,18 +2918,6 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
     [bigDataThreads, inboxFilter, inboxThreads],
   );
 
-  const leadsWorked = useMemo(() => {
-    const today = getLocalISODate();
-    return records.filter(r => {
-      if (r.propietarioId !== ownerId && r.responsable !== ownerName) return false;
-      if (!r.mensajeEnviado) return false;
-      const latestContactEntry = getLatestRealContactEntry(r);
-      if (!latestContactEntry) return false;
-      return getLocalISODate(new Date(latestContactEntry.fecha)) === today;
-    }).length;
-  }, [ownerId, ownerName, records]);
-
-  const progressPct = Math.min((leadsWorked / DAILY_GOAL_TARGET) * 100, 100);
   const inboxSourceOptions = useMemo(() => ([
     { id: 'all', label: t('ws_inbox_title') },
     { id: 'bigdata', label: t('ws_filter_bigdata') },
@@ -3267,17 +3254,32 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
             </button>
           </div>
 
-          <div className="mb-4 rounded-xl border border-orange-100 bg-orange-50/50 p-3">
-            <div className="flex justify-between items-end mb-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                <Target size={12} className="text-[#FF5A1F]" /> {t('ws_daily_goal')}
-              </span>
-              <span className="text-xs font-black text-[#FF5A1F]">{leadsWorked} / {DAILY_GOAL_TARGET}</span>
+          <button
+            type="button"
+            onClick={() => setActiveTab?.('pipeline')}
+            className={`group mb-4 flex w-full items-center justify-between overflow-hidden rounded-[1.35rem] border px-3 py-3 text-left transition-all duration-200 ${
+              isDarkMode
+                ? 'border-white/10 bg-[linear-gradient(135deg,rgba(255,122,26,0.14),rgba(255,255,255,0.03))] hover:border-orange-400/25 hover:bg-[linear-gradient(135deg,rgba(255,122,26,0.18),rgba(255,255,255,0.05))] hover:shadow-[0_20px_40px_-28px_rgba(255,122,26,0.55)]'
+                : 'border-orange-100 bg-[linear-gradient(135deg,rgba(255,245,237,0.98),rgba(255,255,255,0.96))] hover:border-orange-200 hover:shadow-[0_18px_35px_-24px_rgba(255,90,31,0.4)]'
+            }`}
+          >
+            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${
+              isDarkMode
+                ? 'bg-white/[0.06] text-orange-200'
+                : 'bg-white text-[#FF5A1F] shadow-sm'
+            }`}>
+              <Target size={12} />
+              Pipeline
+            </span>
+
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border transition-transform duration-200 group-hover:translate-x-1 ${
+              isDarkMode
+                ? 'border-white/10 bg-white/[0.05] text-orange-300'
+                : 'border-orange-100 bg-white text-[#FF5A1F] shadow-sm'
+            }`}>
+              <ArrowRight size={18} />
             </div>
-            <div className="w-full bg-orange-200/50 rounded-full h-1.5 overflow-hidden">
-              <div className="bg-gradient-to-r from-orange-400 to-[#FF5A1F] h-full rounded-full transition-all duration-500" style={{ width: `${progressPct}%` }}></div>
-            </div>
-          </div>
+          </button>
 
           <div className="flex bg-slate-100 p-1 rounded-xl mb-4 border border-slate-200">
             <button type="button" onClick={() => setWorkspaceTab('active')} className={`flex-1 py-1.5 rounded-lg text-[11px] uppercase tracking-wider font-bold transition-all ${workspaceTab === 'active' ? 'bg-white text-[#FF5A1F] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>{t('ws_tab_active')} ({activeInboxCount})</button>
