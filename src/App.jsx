@@ -277,7 +277,27 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   const [linkedProfileLabel, setLinkedProfileLabel] = useState('');
   const [qrFeedback, setQrFeedback] = useState('');
   const [isQrBusy, setIsQrBusy] = useState(false);
+  const [isMetaConfigOpen, setIsMetaConfigOpen] = useState(false);
+  const [isTestingMeta, setIsTestingMeta] = useState(false);
+  const [metaNotice, setMetaNotice] = useState(null);
   const statusPollRef = useRef(null);
+  const metaConfigStorageKey = `${STORAGE_KEYS.metaApiConfig}:${currentUser?.workspaceId || currentUser?.id || 'guest'}`;
+  const [metaApiConfig, setMetaApiConfig] = usePersistentState(metaConfigStorageKey, {
+    accessToken: '',
+    phoneNumberId: '',
+    wabaId: '',
+  });
+  const [metaConfigDraft, setMetaConfigDraft] = useState(() => ({
+    accessToken: metaApiConfig?.accessToken || '',
+    phoneNumberId: metaApiConfig?.phoneNumberId || '',
+    wabaId: metaApiConfig?.wabaId || '',
+  }));
+  const [metaTestPhoneNumber, setMetaTestPhoneNumber] = useState('');
+  const isMetaConfigured = Boolean(
+    String(metaApiConfig?.accessToken || '').trim() &&
+    String(metaApiConfig?.phoneNumberId || '').trim() &&
+    String(metaApiConfig?.wabaId || '').trim(),
+  );
   const leftCardClass = isDarkMode
     ? 'border-white/10 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(16,16,18,0.92))] text-white'
     : 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] text-slate-900';
@@ -286,6 +306,20 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
     : 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,251,0.96))] text-slate-900';
   const softText = isDarkMode ? 'text-slate-300' : 'text-slate-600';
   const mutedText = isDarkMode ? 'text-slate-400' : 'text-slate-500';
+
+  useEffect(() => {
+    setMetaConfigDraft({
+      accessToken: metaApiConfig?.accessToken || '',
+      phoneNumberId: metaApiConfig?.phoneNumberId || '',
+      wabaId: metaApiConfig?.wabaId || '',
+    });
+  }, [metaApiConfig]);
+
+  useEffect(() => {
+    if (!metaNotice) return undefined;
+    const timer = window.setTimeout(() => setMetaNotice(null), 2800);
+    return () => window.clearTimeout(timer);
+  }, [metaNotice]);
 
   const benefits = [
     'Verificación empresarial',
@@ -447,6 +481,97 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
       setIsQrBusy(false);
     }
   }, [clearStatusPoll, getMissingSessionMessage, handleReloadQr, onVerifySession]);
+
+  const handleMetaDraftChange = useCallback((field, value) => {
+    setMetaConfigDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }, []);
+
+  const handleSaveMetaConfig = useCallback(() => {
+    const nextConfig = {
+      accessToken: String(metaConfigDraft.accessToken || '').trim(),
+      phoneNumberId: String(metaConfigDraft.phoneNumberId || '').trim(),
+      wabaId: String(metaConfigDraft.wabaId || '').trim(),
+    };
+
+    setMetaApiConfig(nextConfig);
+    setMetaNotice({
+      tone: 'success',
+      title: 'Credenciales guardadas',
+      message: 'La configuración local de Meta quedó almacenada.',
+    });
+  }, [metaConfigDraft, setMetaApiConfig]);
+
+  const handleTestMetaConfig = useCallback(() => {
+    const nextConfig = {
+      accessToken: String(metaConfigDraft.accessToken || '').trim(),
+      phoneNumberId: String(metaConfigDraft.phoneNumberId || '').trim(),
+      wabaId: String(metaConfigDraft.wabaId || '').trim(),
+    };
+    const normalizedTestPhone = String(metaTestPhoneNumber || '').replace(/[^\d]/g, '').trim();
+
+    if (!nextConfig.accessToken || !nextConfig.phoneNumberId || !nextConfig.wabaId) {
+      setMetaNotice({
+        tone: 'warning',
+        title: 'Faltan credenciales',
+        message: 'Completa access token, phone number ID y WABA ID antes de probar la conexión.',
+      });
+      return;
+    }
+
+    if (!normalizedTestPhone) {
+      setMetaNotice({
+        tone: 'warning',
+        title: 'Falta número de prueba',
+        message: 'Agrega un número con código de país para enviar la plantilla hello_world.',
+      });
+      return;
+    }
+
+    setIsTestingMeta(true);
+
+    api
+      .sendMetaTestMessage({
+        accessToken: nextConfig.accessToken,
+        phoneNumberId: nextConfig.phoneNumberId,
+        wabaId: nextConfig.wabaId,
+        testPhoneNumber: normalizedTestPhone,
+      })
+      .then(() => {
+        setMetaNotice({
+          tone: 'success',
+          title: 'Conexión lista',
+          message: 'Conexión a Meta exitosa',
+        });
+      })
+      .catch((error) => {
+        const errorMessage =
+          error?.payload?.details
+          || error?.payload?.error
+          || error?.message
+          || 'No se pudo completar la prueba con Meta.';
+
+        setMetaNotice({
+          tone: 'warning',
+          title: 'Meta rechazó la prueba',
+          message: errorMessage,
+        });
+      })
+      .finally(() => {
+        setIsTestingMeta(false);
+      });
+  }, [metaConfigDraft, metaTestPhoneNumber]);
+
+  const handleCloseMetaConfig = useCallback(() => {
+    setMetaConfigDraft({
+      accessToken: metaApiConfig?.accessToken || '',
+      phoneNumberId: metaApiConfig?.phoneNumberId || '',
+      wabaId: metaApiConfig?.wabaId || '',
+    });
+    setIsMetaConfigOpen(false);
+  }, [metaApiConfig]);
 
   useEffect(() => {
     if (!sessionToken) {
@@ -630,6 +755,24 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   return (
     <div className="wa-connect-view min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 lg:px-6">
       <div className="mx-auto flex w-full max-w-[1380px] flex-col gap-4">
+        {metaNotice ? (
+          <div className={`fixed right-4 top-6 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-[1.25rem] border px-4 py-3 backdrop-blur-2xl sm:right-6 ${
+            metaNotice.tone === 'success'
+              ? 'border-emerald-400/25 bg-[rgba(8,18,12,0.82)] text-white shadow-[0_20px_45px_-24px_rgba(16,185,129,0.55)]'
+              : 'border-amber-400/25 bg-[rgba(24,18,8,0.82)] text-white shadow-[0_20px_45px_-24px_rgba(245,158,11,0.55)]'
+          }`}>
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${metaNotice.tone === 'success' ? 'bg-emerald-500/18 text-emerald-300' : 'bg-amber-500/18 text-amber-300'}`}>
+                <CheckCircle size={16} />
+              </div>
+              <div>
+                <p className="text-sm font-black">{metaNotice.title}</p>
+                <p className="mt-1 text-sm text-slate-300">{metaNotice.message}</p>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex items-end justify-between gap-3">
           <div>
             <h1 className={`text-[2.35rem] leading-none tracking-tight sm:text-[3rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
@@ -690,6 +833,17 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
                   <div className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
                     Oficial
                   </div>
+                  <div className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
+                    isMetaConfigured
+                      ? isDarkMode
+                        ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
+                        : 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                      : isDarkMode
+                        ? 'border-slate-500/20 bg-white/[0.05] text-slate-300'
+                        : 'border-slate-200 bg-white text-slate-500'
+                  }`}>
+                    {isMetaConfigured ? 'Configurado' : 'No configurado'}
+                  </div>
                 </div>
                 <h2 className={`text-[1.8rem] font-black leading-tight sm:text-[2.35rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Business API</h2>
                 <p className={`mt-2.5 max-w-none text-sm leading-6 sm:text-[14px] ${softText}`}>
@@ -711,9 +865,10 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
+                  onClick={() => setIsMetaConfigOpen(true)}
                   className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-[18px] py-2.5 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
                 >
-                  Configurar API Oficial
+                  {isMetaConfigured ? 'Modificar Configuración' : 'Configurar API Oficial'}
                 </button>
                 <div className={`flex items-center gap-2 text-[13px] ${mutedText}`}>
                   <Lock size={15} />
@@ -722,6 +877,132 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               </div>
             </div>
           </section>
+        </div>
+
+        <div className={`pointer-events-none fixed inset-0 z-40 transition-all duration-300 ${isMetaConfigOpen ? 'opacity-100' : 'opacity-0'}`}>
+          <div
+            className={`absolute inset-0 bg-slate-950/35 backdrop-blur-[2px] transition-opacity duration-300 ${isMetaConfigOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
+            onClick={handleCloseMetaConfig}
+          />
+          <aside
+            className={`pointer-events-auto absolute right-0 top-0 h-full w-full max-w-[30rem] transform transition-transform duration-300 ease-out ${isMetaConfigOpen ? 'translate-x-0' : 'translate-x-full'}`}
+          >
+            <div className={`relative h-full overflow-y-auto border-l p-5 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.65)] backdrop-blur-3xl sm:p-6 ${
+              isDarkMode
+                ? 'border-white/10 bg-[linear-gradient(180deg,rgba(12,12,16,0.96),rgba(10,10,14,0.94))] text-white'
+                : 'border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] text-slate-900'
+            }`}>
+              <div className="absolute -left-10 top-16 h-32 w-32 rounded-full bg-[#25D366]/12 blur-[80px]"></div>
+              <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-[#FF5A1F]/14 blur-[90px]"></div>
+
+              <div className="relative">
+                <div className="mb-5 flex items-start justify-between gap-3">
+                  <div>
+                    <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+                      <span className="h-2 w-2 rounded-full bg-[#25D366]" />
+                      Meta API
+                    </div>
+                    <h2 className={`text-[1.75rem] font-black leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Configurar API Oficial</h2>
+                    <p className={`mt-2 max-w-md text-sm leading-6 ${softText}`}>
+                      Guarda tus credenciales y prueba la integración oficial enviando la plantilla base de Meta a un número real.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCloseMetaConfig}
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-all ${isDarkMode ? 'bg-white/6 text-slate-300 hover:bg-white/10 hover:text-white' : 'bg-white/80 text-slate-500 hover:bg-white hover:text-slate-700'}`}
+                    aria-label="Cerrar configuración Meta"
+                  >
+                    <X size={17} />
+                  </button>
+                </div>
+
+                <div className={`rounded-[1.5rem] border p-4 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
+                  <div className="space-y-4">
+                    <label className="block">
+                      <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>Token de Acceso</span>
+                      <input
+                        type="password"
+                        value={metaConfigDraft.accessToken}
+                        onChange={(event) => handleMetaDraftChange('accessToken', event.target.value)}
+                        placeholder="Ingresa tu access token"
+                        className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>ID del Número de Teléfono</span>
+                      <input
+                        type="password"
+                        value={metaConfigDraft.phoneNumberId}
+                        onChange={(event) => handleMetaDraftChange('phoneNumberId', event.target.value)}
+                        placeholder="Ingresa el phoneNumberId"
+                        className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>ID de la Cuenta de WhatsApp Business</span>
+                      <input
+                        type="password"
+                        value={metaConfigDraft.wabaId}
+                        onChange={(event) => handleMetaDraftChange('wabaId', event.target.value)}
+                        placeholder="Ingresa el wabaId"
+                        className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className={`mt-4 rounded-[1.2rem] border px-4 py-3 text-xs leading-6 ${isDarkMode ? 'border-white/10 bg-white/[0.03] text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
+                  Esta configuración se guarda en tu navegador dentro del workspace actual. La prueba envía la plantilla oficial <span className="font-black">hello_world</span> al número que indiques.
+                </div>
+
+                <div className="mt-5">
+                  <label className="block">
+                    <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>Número de prueba</span>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={metaTestPhoneNumber}
+                      onChange={(event) => setMetaTestPhoneNumber(event.target.value)}
+                      placeholder="Con código de país, ej: 5213312345678"
+                      className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.035] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white/80 text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleSaveMetaConfig}
+                    className="inline-flex flex-1 items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-5 py-3 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
+                  >
+                    Guardar Credenciales
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTestMetaConfig}
+                    disabled={isTestingMeta}
+                    className="inline-flex flex-1 items-center justify-center rounded-full bg-[#25D366] px-5 py-3 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(37,211,102,0.7)] transition-transform hover:-translate-y-0.5 hover:bg-[#22c55e] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isTestingMeta ? 'Probando...' : 'Probar Conexión'}
+                  </button>
+                </div>
+
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleCloseMetaConfig}
+                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em] transition-all ${isDarkMode ? 'bg-white/6 text-slate-300 hover:bg-white/10 hover:text-white' : 'bg-white/80 text-slate-500 hover:bg-white hover:text-slate-700'}`}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
 
         <style dangerouslySetInnerHTML={{ __html: `
@@ -807,6 +1088,7 @@ export default function App() {
     handleRegister: registerUser,
     handleUpdatePassword,
     handleUpdateProfile,
+    handleApplyTeamCode,
     handleImpersonate,
     handleReturnToAdmin,
     handleVerifySession,
@@ -1006,6 +1288,14 @@ export default function App() {
   const handleUpdateProfileWithPulse = async (profileData) => {
     const result = await handleUpdateProfile(profileData);
     if (result?.ok && !result?.skipped) {
+      triggerFaviconPulse(3000);
+    }
+    return result;
+  };
+
+  const handleApplyTeamCodeWithPulse = async (teamCode) => {
+    const result = await handleApplyTeamCode(teamCode);
+    if (result?.ok) {
       triggerFaviconPulse(3000);
     }
     return result;
@@ -1500,13 +1790,13 @@ export default function App() {
         <div className="min-h-0 flex-1 pb-24 lg:pb-0">
         {activeTab === 'home' && <DashboardView records={dashboardDisplayedRecords} allRecords={records} duplicateRecords={duplicateRecords} onSelectRecord={setSelectedRecord} dashboardSectorFilter={dashboardSectorFilter} setDashboardSectorFilter={setDashboardSectorFilter} setActiveTab={setActiveTab} myAgents={myAgents} t={t} currentUser={currentUser} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} onCreateRecord={handleCreateRecord} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} setActiveTab={setActiveTab} />}
-        {activeTab === 'pipeline' && <PipelineView records={records} usersDb={usersDb} currentUser={currentUser} onChangeStatus={handleChangeStatus} onSelectRecord={setSelectedRecord} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
+        {activeTab === 'pipeline' && <PipelineView records={records} usersDb={usersDb} currentUser={currentUser} onChangeStatus={handleChangeStatus} onSelectRecord={setSelectedRecord} isViewOnly={isViewOnly} isDarkMode={isDarkMode} setActiveTab={setActiveTab} />}
         {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
         {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} onOpenWorkspaceConversation={handleOpenWorkspaceConversation} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
         {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} currentUser={currentUser} onVerifySession={handleVerifySession} />}
         {activeTab === 'reports' && <ReportsView records={records} duplicateRecords={duplicateRecords} currentUser={currentUser} myAgents={myAgents} usersDb={usersDb} sharedLinks={sharedLinks} t={t} language={language} isDarkMode={isDarkMode} />}
-        {activeTab === 'tools' && <ToolsView isDarkMode={isDarkMode} onOpenShareLeads={() => setActiveTab('network')} />}
-        {activeTab === 'network' && <NetworkView currentUser={currentUser} usersDb={usersDb} sharedLinks={sharedLinks} records={records} onLinkCreated={handleCreateSharedLink} myAgents={myAgents} t={t} isDarkMode={isDarkMode} />}
+        {activeTab === 'tools' && <ToolsView isDarkMode={isDarkMode} onOpenShareLeads={() => setActiveTab('network')} records={records} currentUser={currentUser} onBulkChangeStatus={handleBulkChangeStatus} />}
+        {activeTab === 'network' && <NetworkView currentUser={currentUser} usersDb={usersDb} sharedLinks={sharedLinks} records={records} onLinkCreated={handleCreateSharedLink} onApplyTeamCode={handleApplyTeamCodeWithPulse} myAgents={myAgents} t={t} isDarkMode={isDarkMode} />}
         </div>
       </main>
 

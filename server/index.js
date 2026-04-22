@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { config } from './src/config.js';
 import { ensureAppSchema } from './src/db.js';
 import { handleRequest } from './src/app.js';
+import { startAutoCoolingEngine } from './src/services/auto-cooling-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,6 +69,7 @@ const serveStatic = async (req, res) => {
 
 const startServer = async () => {
   await ensureAppSchema();
+  startAutoCoolingEngine();
 
   const server = createServer((req, res) => {
     if (!req.url?.startsWith('/api')) {

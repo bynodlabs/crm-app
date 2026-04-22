@@ -209,13 +209,16 @@ function ShareLeadsModal({ onClose, records, teamMembers, onGenerated, t }) {
   );
 }
 
-export function NetworkView({ currentUser, usersDb, sharedLinks, records, onLinkCreated, t, isDarkMode = false }) {
+export function NetworkView({ currentUser, usersDb, sharedLinks, records, onLinkCreated, onApplyTeamCode, t, isDarkMode = false }) {
   const miembrosEquipo = usersDb.filter(u => u.referidoPor === currentUser.codigoPropio);
   const [isCopied, setIsCopied] = useState(false);
   const [showShareLeadsModal, setShowShareLeadsModal] = useState(false);
   const [teamPage, setTeamPage] = useState(1);
   const [sharedLinksPage, setSharedLinksPage] = useState(1);
   const [receivedLeadsPage, setReceivedLeadsPage] = useState(1);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinCodeState, setJoinCodeState] = useState({ type: '', message: '' });
+  const [isSubmittingJoinCode, setIsSubmittingJoinCode] = useState(false);
   const TEAM_PAGE_SIZE = 3;
   const SHARED_LINKS_PAGE_SIZE = 4;
   const RECEIVED_LEADS_PAGE_SIZE = 4;
@@ -230,6 +233,14 @@ export function NetworkView({ currentUser, usersDb, sharedLinks, records, onLink
   const deliveredLeadsCount = useMemo(
     () => (sharedLinks || []).reduce((total, link) => total + Number(link?.count || 0), 0),
     [sharedLinks],
+  );
+  const receivedLeadsCount = useMemo(
+    () =>
+      records.reduce(
+        (total, record) => total + (record?.sourceRecordId ? 1 : 0),
+        0,
+      ),
+    [records],
   );
   const recentSharedLinks = useMemo(
     () =>
@@ -331,6 +342,20 @@ export function NetworkView({ currentUser, usersDb, sharedLinks, records, onLink
     setReceivedLeadsPage((prev) => Math.min(prev, Math.max(1, Math.ceil(receivedLeadBatches.length / RECEIVED_LEADS_PAGE_SIZE))));
   }, [receivedLeadBatches.length]);
 
+  const handleApplyJoinCode = async () => {
+    if (!onApplyTeamCode || !joinCode.trim()) return;
+    setIsSubmittingJoinCode(true);
+    setJoinCodeState({ type: '', message: '' });
+    const result = await onApplyTeamCode(joinCode.trim());
+    if (result?.ok) {
+      setJoinCode('');
+      setJoinCodeState({ type: 'success', message: 'Tu cuenta ya quedó vinculada al equipo.' });
+    } else {
+      setJoinCodeState({ type: 'error', message: result?.error || 'No se pudo vincular el código.' });
+    }
+    setIsSubmittingJoinCode(false);
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-slate-50/30 p-4 sm:p-6 lg:p-10 no-scrollbar">
       {showShareLeadsModal && (
@@ -352,15 +377,144 @@ export function NetworkView({ currentUser, usersDb, sharedLinks, records, onLink
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-1 space-y-6">
-          <div className="relative overflow-hidden rounded-[2rem] bg-gradient-to-br from-purple-600 to-indigo-600 p-5 text-white shadow-md sm:p-8">
-            <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-            <h3 className="text-sm font-bold text-purple-200 uppercase tracking-wider mb-2">{t('team_code_title')}</h3>
-            <div className="text-4xl font-black font-mono tracking-widest mb-6 relative z-10">{currentUser.codigoPropio}</div>
-            <p className="text-sm text-purple-100 mb-6 relative z-10">{t('team_code_desc')}</p>
-            <button type="button" onClick={handleCopyCode} className={`relative z-10 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 font-bold transition-all ${isCopied ? 'bg-emerald-500 text-white' : 'bg-white text-purple-600 hover:bg-purple-50 shadow-lg'}`}>
-              {isCopied ? <Check size={18} /> : <Copy size={18} />} {isCopied ? t('team_code_copied') : t('team_code_copy')}
-            </button>
+          <div className="relative overflow-hidden rounded-[2.2rem] bg-gradient-to-br from-[#7b2ff7] via-[#8a38ff] to-[#4f46e5] p-5 text-white shadow-[0_28px_70px_-32px_rgba(91,33,182,0.65)] sm:p-8">
+            <div className="absolute -right-16 -top-10 h-44 w-44 rounded-full bg-white/10 blur-3xl"></div>
+            <div className="absolute -left-12 bottom-0 h-36 w-36 rounded-full bg-fuchsia-300/15 blur-3xl"></div>
+
+            <div className="relative z-10 space-y-5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.24em] text-purple-100">
+                  Invitaciones
+                </span>
+                <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-[11px] font-bold text-emerald-100">
+                  {miembrosEquipo.length} socios
+                </span>
+              </div>
+
+              <div>
+                <h3 className="max-w-[12ch] text-[1.9rem] font-black uppercase leading-[1.02] tracking-tight sm:text-[2.2rem]">
+                  {t('team_code_title')}
+                </h3>
+                <p className="mt-3 max-w-sm text-sm leading-relaxed text-purple-100/90">
+                  {t('team_code_desc')}
+                </p>
+              </div>
+
+              <div className="rounded-[1.8rem] border border-white/20 bg-white/14 p-3 shadow-inner backdrop-blur-md">
+                <div className="rounded-[1.45rem] border border-white/60 bg-white px-5 py-5 text-center shadow-[0_18px_42px_-28px_rgba(15,23,42,0.55)]">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-400">
+                    Codigo de equipo
+                  </p>
+                  <div className="mt-3 break-all text-[2.15rem] font-black uppercase tracking-[0.12em] text-[#7b2ff7] sm:text-[2.5rem]">
+                    {currentUser.codigoPropio}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2.5">
+                <div className="rounded-[1.2rem] border border-white/15 bg-white/10 px-3 py-3 backdrop-blur-sm">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-purple-200">Socios</p>
+                  <p className="mt-2 text-2xl font-black">{miembrosEquipo.length}</p>
+                </div>
+                <div className="rounded-[1.2rem] border border-white/15 bg-white/10 px-3 py-3 backdrop-blur-sm">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-purple-200">Entregados</p>
+                  <p className="mt-2 text-2xl font-black">{deliveredLeadsCount}</p>
+                </div>
+                <div className="rounded-[1.2rem] border border-white/15 bg-white/10 px-3 py-3 backdrop-blur-sm">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-purple-200">Recibidos</p>
+                  <p className="mt-2 text-2xl font-black">{receivedLeadsCount}</p>
+                </div>
+              </div>
+
+              <div className="rounded-[1.45rem] border border-white/15 bg-black/10 px-4 py-4 backdrop-blur-sm">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/15">
+                    <UserPlus size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-purple-200">Como se usa</p>
+                    <p className="mt-2 text-sm leading-relaxed text-purple-50/95">
+                      Tu socio se registra, coloca este codigo y queda vinculado automaticamente a tu equipo para que todo se gestione desde aqui.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className={`relative z-10 flex w-full items-center justify-center gap-2 rounded-[1.25rem] py-4 text-base font-black transition-all ${
+                  isCopied
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-white text-purple-700 hover:bg-purple-50 shadow-[0_18px_32px_-24px_rgba(15,23,42,0.65)]'
+                }`}
+              >
+                {isCopied ? <Check size={18} /> : <Copy size={18} />} {isCopied ? t('team_code_copied') : t('team_code_copy')}
+              </button>
+            </div>
           </div>
+
+          {currentUser?.rol !== 'admin' && (
+            currentUser?.referidoPor ? (
+              <div className="rounded-[1.8rem] border border-emerald-100 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600">
+                    <CheckCircle size={20} />
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-slate-800">Cuenta vinculada</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                      Tu usuario ya pertenece a un equipo y quedó asociado con el código:
+                    </p>
+                    <div className="mt-4 inline-flex rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-2.5 text-sm font-black tracking-[0.18em] text-emerald-700">
+                      {currentUser.referidoPor}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[1.8rem] border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-fuchsia-50 text-fuchsia-600">
+                    <UserPlus size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="text-sm font-bold text-slate-800">¿Tienes código de equipo?</h4>
+                    <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                      Si te invitó un líder, ingrésalo aquí para vincular tu cuenta después del registro.
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      <input
+                        type="text"
+                        value={joinCode}
+                        onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                        placeholder="Equipo123"
+                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold uppercase tracking-[0.14em] text-slate-700 outline-none transition-all placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-300 focus:border-fuchsia-300 focus:bg-white focus:ring-2 focus:ring-fuchsia-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleApplyJoinCode}
+                        disabled={isSubmittingJoinCode || !joinCode.trim()}
+                        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <UserPlus size={16} />
+                        {isSubmittingJoinCode ? 'Vinculando...' : 'Vincular código'}
+                      </button>
+                      {joinCodeState.message ? (
+                        <div className={`rounded-2xl border px-4 py-3 text-xs font-medium ${
+                          joinCodeState.type === 'success'
+                            ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                            : 'border-rose-100 bg-rose-50 text-rose-700'
+                        }`}>
+                          {joinCodeState.message}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          )}
 
           <div className="flex items-start gap-4 rounded-3xl border border-slate-100 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-purple-50 text-purple-600">

@@ -150,6 +150,13 @@ export const api = {
     return apiRequest('/wa/status');
   },
 
+  sendMetaTestMessage(payload) {
+    return apiRequest('/meta/send', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   listWhatsAppGroups() {
     return apiRequest('/wa/groups');
   },

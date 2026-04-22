@@ -399,6 +399,71 @@ export function useSessionState() {
     return commitProfileLocally(updatedUser);
   };
 
+  const handleApplyTeamCode = async (teamCode) => {
+    if (!currentUser) {
+      return { ok: false, error: 'No hay sesión activa.' };
+    }
+
+    const safeTeamCode = normalizeReferralCode(teamCode);
+    if (!safeTeamCode) {
+      return { ok: false, error: 'Ingresa un código de equipo válido.' };
+    }
+
+    if (normalizeReferralCode(currentUser.codigoPropio) === safeTeamCode) {
+      return { ok: false, error: 'No puedes usar tu propio código.' };
+    }
+
+    if (currentUser.referidoPor && normalizeReferralCode(currentUser.referidoPor) !== safeTeamCode) {
+      return { ok: false, error: 'Tu cuenta ya está vinculada a un equipo.' };
+    }
+
+    const commitTeamCodeLocally = (nextUser) => {
+      setUsersDb((prev) =>
+        prev.map((user) => (
+          user.id === currentUser.id
+            ? { ...user, referidoPor: nextUser.referidoPor }
+            : user
+        )),
+      );
+      setCurrentUser(nextUser);
+      return { ok: true, user: nextUser };
+    };
+
+    try {
+      const result = await api.updateProfile({
+        userId: currentUser.id,
+        nombre: currentUser.nombre,
+        avatarUrl: currentUser.avatarUrl || '',
+        autoCreateWhatsappLeads: Boolean(currentUser.autoCreateWhatsappLeads),
+        referidoPor: safeTeamCode,
+      });
+      const updatedUser = {
+        ...currentUser,
+        ...result.user,
+        rol: currentUser.rol,
+      };
+      return commitTeamCodeLocally(updatedUser);
+    } catch (error) {
+      const canFallbackLocally = !error?.status || error.status === 401 || error.status === 404 || error.status >= 500;
+      if (!canFallbackLocally) {
+        return { ok: false, error: error?.payload?.error || 'No se pudo vincular el código.' };
+      }
+    }
+
+    const referralExists = safeTeamCode === 'ANA-9X2'
+      || usersDb.some((candidate) => String(candidate.codigoPropio || '').trim().toUpperCase() === safeTeamCode);
+
+    if (!referralExists) {
+      return { ok: false, error: 'Ese código de equipo no existe.' };
+    }
+
+    const updatedUser = {
+      ...currentUser,
+      referidoPor: safeTeamCode,
+    };
+    return commitTeamCodeLocally(updatedUser);
+  };
+
   const handleImpersonate = async (userToImpersonate) => {
     const adminSnapshot = {
       user: currentUser,
@@ -474,6 +539,7 @@ export function useSessionState() {
     handleRegister,
     handleUpdatePassword,
     handleUpdateProfile,
+    handleApplyTeamCode,
     handleImpersonate,
     handleReturnToAdmin,
     handleVerifySession,

@@ -8,7 +8,6 @@ export function LoginView({ onLogin, onRegister, t, notice = null, onClearNotice
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [nombre, setNombre] = useState('');
-  const [codigoReferido, setCodigoReferido] = useState('');
 
   const [splashOpacity, setSplashOpacity] = useState(1);
   const [splashDisplay, setSplashDisplay] = useState('flex');
@@ -41,7 +40,7 @@ export function LoginView({ onLogin, onRegister, t, notice = null, onClearNotice
     e.preventDefault();
     if (isRegistering) {
       if (!nombre.trim() || !email.trim() || !password.trim()) return;
-      await onRegister(nombre, email, password, codigoReferido);
+      await onRegister(nombre, email, password);
     } else {
       if (!email.trim() || !password.trim()) return;
       await onLogin(email, password);
@@ -55,7 +54,6 @@ export function LoginView({ onLogin, onRegister, t, notice = null, onClearNotice
       setEmail('');
       setPassword('');
       setNombre('');
-      setCodigoReferido('');
     } else {
       setEmail('');
       setPassword('');
@@ -607,15 +605,6 @@ export function LoginView({ onLogin, onRegister, t, notice = null, onClearNotice
                     {notice && isRegistering && (
                       <div className="inline-login-notice">{notice.message}</div>
                     )}
-                  </div>
-                  <div className="form-group">
-                    <label>{t('login_team_code_label')} <span className="optional-text">({t('common_optional')})</span></label>
-                    <input
-                      type="text"
-                      value={codigoReferido}
-                      onChange={handleFieldChange(setCodigoReferido)}
-                      placeholder={t('login_team_code_placeholder')}
-                    />
                   </div>
                   <button type="submit" className="submit-btn">{t('login_register_submit')}</button>
 

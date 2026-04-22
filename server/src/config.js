@@ -13,6 +13,7 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || '',
   adminEmail: process.env.ADMIN_EMAIL || 'bynodlabs@gmail.com',
   adminPassword: process.env.ADMIN_PASSWORD || 'bigdata@',
+  metaWebhookVerifyToken: process.env.META_WEBHOOK_VERIFY_TOKEN || '',
   mysqlHost: process.env.MYSQL_HOST || process.env.DB_HOST || '127.0.0.1',
   mysqlPort: toPositiveInt(process.env.MYSQL_PORT || process.env.DB_PORT, 3306),
   mysqlUser: process.env.MYSQL_USER || process.env.DB_USER || 'root',

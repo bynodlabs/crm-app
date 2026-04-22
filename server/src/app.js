@@ -10,6 +10,7 @@ import { sharedLinkService } from './services/shared-link-service.js';
 import { userService } from './services/user-service.js';
 import { whatsappService } from './services/whatsapp-service.js';
 import { conversationService } from './services/conversation-service.js';
+import { handleMetaRoutes } from './routes/meta-routes.js';
 
 const withCors = (res) => {
   res.setHeader('Access-Control-Allow-Origin', config.corsOrigin);
@@ -49,6 +50,13 @@ export async function handleRequest(req, res) {
   if (pathname === '/api/health' && req.method === 'GET') {
     sendJson(res, 200, { ok: true, requestId, service: 'crm-api' });
     return;
+  }
+
+  if (pathname.startsWith('/api/meta')) {
+    const wasHandled = await handleMetaRoutes(req, res, { pathname, query: url.query || {} });
+    if (wasHandled) {
+      return;
+    }
   }
 
   if (pathname === '/api/auth/login' && req.method === 'POST') {

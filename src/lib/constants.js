@@ -78,4 +78,6 @@ export const STORAGE_KEYS = {
   duplicateRecords: 'crm_duplicate_records',
   sharedLinks: 'crm_shared_links',
   waTemplate: 'crm_wa_template',
+  campaignHistory: 'crm_campaign_history',
+  metaApiConfig: 'crm_meta_api_config',
 };

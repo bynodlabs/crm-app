@@ -75,8 +75,9 @@ export const userService = {
     };
   },
 
-  async updateProfile({ currentUser, userId, nombre, codigoPropio, avatarUrl, autoCreateWhatsappLeads }) {
+  async updateProfile({ currentUser, userId, nombre, codigoPropio, referidoPor, avatarUrl, autoCreateWhatsappLeads }) {
     const safeName = String(nombre || '').trim();
+    const safeReferralCode = referidoPor === undefined ? undefined : String(referidoPor || '').trim().toUpperCase();
     const normalizedAvatarUrl = typeof avatarUrl === 'string' ? avatarUrl.trim() : undefined;
     const normalizedAutoCreateWhatsappLeads = autoCreateWhatsappLeads === undefined
       ? undefined
@@ -120,6 +121,34 @@ export const userService = {
 
     if (!user) {
       return { status: 404, payload: { error: 'Usuario no encontrado.' } };
+    }
+
+    if (safeReferralCode !== undefined) {
+      if (currentUser.rol === 'admin') {
+        return { status: 403, payload: { error: 'El administrador no puede vincularse a un equipo.' } };
+      }
+
+      if (user.referidoPor && user.referidoPor !== safeReferralCode) {
+        return { status: 409, payload: { error: 'Tu cuenta ya está vinculada a un equipo.' } };
+      }
+
+      if (!safeReferralCode) {
+        return { status: 400, payload: { error: 'Ingresa un código de equipo válido.' } };
+      }
+
+      if (safeReferralCode === String(user.codigoPropio || '').trim().toUpperCase()) {
+        return { status: 400, payload: { error: 'No puedes usar tu propio código de equipo.' } };
+      }
+
+      const referralExists = safeReferralCode === 'ANA-9X2' || db.users.some(
+        (candidate) => String(candidate.codigoPropio || '').trim().toUpperCase() === safeReferralCode,
+      );
+
+      if (!referralExists) {
+        return { status: 404, payload: { error: 'Ese código de equipo no existe.' } };
+      }
+
+      user.referidoPor = safeReferralCode;
     }
 
     user.nombre = safeName;

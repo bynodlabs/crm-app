@@ -3,6 +3,7 @@ import {
   AlertCircle,
   ArrowUpRight,
   Clock,
+  MessageCircle,
   TrendingUp,
   Users,
 } from 'lucide-react';
@@ -90,94 +91,14 @@ function getRecordLastActivity(record) {
 }
 
 function getCardTheme(stageValue, isDarkMode) {
-  if (stageValue === PIPELINE_STAGE_VALUES.HOT_LEAD) {
-    return {
-      cardClass: 'bg-[linear-gradient(145deg,#ff7a72,#ff5a1f)] text-white border-transparent shadow-[0_18px_40px_rgba(255,90,31,0.28)]',
-      progressTrackClass: 'bg-black/15',
-      progressFillClass: 'bg-white',
-      mutedClass: 'text-white/80',
-      iconButtonClass: 'text-white/80 hover:bg-white/15',
-      dividerClass: 'border-white/20',
-      bubbleClass: 'bg-white/16 text-white',
-    };
-  }
-
-  if (stageValue === PIPELINE_STAGE_VALUES.PAYMENT) {
-    return {
-      cardClass: 'bg-[linear-gradient(145deg,#b88cff,#8758ff)] text-white border-transparent shadow-[0_18px_40px_rgba(136,88,255,0.28)]',
-      progressTrackClass: 'bg-black/15',
-      progressFillClass: 'bg-white',
-      mutedClass: 'text-white/80',
-      iconButtonClass: 'text-white/80 hover:bg-white/15',
-      dividerClass: 'border-white/20',
-      bubbleClass: 'bg-white/16 text-white',
-    };
-  }
-
-  if (stageValue === PIPELINE_STAGE_VALUES.CUSTOMER) {
-    return {
-      cardClass: 'bg-[linear-gradient(145deg,#6ce0e2,#25D366)] text-[#072313] border-transparent shadow-[0_18px_40px_rgba(37,211,102,0.22)]',
-      progressTrackClass: 'bg-black/10',
-      progressFillClass: 'bg-[#0b1f16]',
-      mutedClass: 'text-[#0b1f16]/75',
-      iconButtonClass: 'text-[#0b1f16]/75 hover:bg-black/10',
-      dividerClass: 'border-[#0b1f16]/12',
-      bubbleClass: 'bg-black/10 text-[#0b1f16]',
-    };
-  }
-
-  if (stageValue === PIPELINE_STAGE_VALUES.LOST) {
-    return {
-      cardClass: isDarkMode
-        ? 'bg-[linear-gradient(145deg,rgba(74,20,20,0.92),rgba(54,10,18,0.96))] text-white border border-rose-400/15 shadow-[0_16px_34px_rgba(127,29,29,0.22)]'
-        : 'bg-[linear-gradient(145deg,#fff1f2,#ffe4e6)] text-slate-900 border border-rose-100 shadow-[0_14px_32px_rgba(225,29,72,0.08)]',
-      progressTrackClass: isDarkMode ? 'bg-black/20' : 'bg-rose-100',
-      progressFillClass: isDarkMode ? 'bg-rose-300' : 'bg-rose-500',
-      mutedClass: isDarkMode ? 'text-rose-100/78' : 'text-rose-700',
-      iconButtonClass: isDarkMode ? 'text-rose-100/80 hover:bg-white/10' : 'text-rose-400 hover:bg-white/70',
-      dividerClass: isDarkMode ? 'border-white/10' : 'border-rose-100',
-      bubbleClass: isDarkMode ? 'bg-white/10 text-white' : 'bg-white text-rose-700',
-    };
-  }
-
-  if (stageValue === PIPELINE_STAGE_VALUES.COLD_LEAD) {
-    return {
-      cardClass: isDarkMode
-        ? 'bg-[linear-gradient(145deg,rgba(27,31,40,0.92),rgba(15,18,24,0.96))] text-white border border-white/8 shadow-[0_16px_34px_rgba(2,6,23,0.4)]'
-        : 'bg-[linear-gradient(145deg,#f8fafc,#eef2f7)] text-slate-900 border border-slate-200 shadow-[0_14px_28px_rgba(15,23,42,0.06)]',
-      progressTrackClass: isDarkMode ? 'bg-black/20' : 'bg-slate-200',
-      progressFillClass: isDarkMode ? 'bg-slate-300' : 'bg-slate-500',
-      mutedClass: isDarkMode ? 'text-slate-300' : 'text-slate-500',
-      iconButtonClass: isDarkMode ? 'text-slate-300 hover:bg-white/8' : 'text-slate-400 hover:bg-white',
-      dividerClass: isDarkMode ? 'border-white/10' : 'border-slate-200',
-      bubbleClass: isDarkMode ? 'bg-white/10 text-white' : 'bg-white text-slate-700',
-    };
-  }
-
-  if (stageValue === PIPELINE_STAGE_VALUES.NEW) {
-    return {
-      cardClass: isDarkMode
-        ? 'bg-[linear-gradient(145deg,rgba(14,17,24,0.92),rgba(25,28,36,0.94))] text-white border border-white/10 shadow-[0_16px_34px_rgba(15,23,42,0.32)]'
-        : 'bg-white/92 text-slate-800 border border-white/60 shadow-[0_8px_22px_rgba(15,23,42,0.06)] backdrop-blur-sm',
-      progressTrackClass: isDarkMode ? 'bg-black/20' : 'bg-slate-100',
-      progressFillClass: isDarkMode ? 'bg-sky-300' : 'bg-sky-500',
-      mutedClass: isDarkMode ? 'text-slate-300' : 'text-slate-500',
-      iconButtonClass: isDarkMode ? 'text-slate-300 hover:bg-white/8' : 'text-slate-400 hover:bg-slate-100',
-      dividerClass: isDarkMode ? 'border-white/10' : 'border-slate-100',
-      bubbleClass: isDarkMode ? 'bg-white/10 text-white' : 'bg-slate-50 text-slate-700',
-    };
-  }
-
   return {
     cardClass: isDarkMode
-      ? 'bg-[linear-gradient(145deg,rgba(14,17,24,0.95),rgba(24,28,36,0.94))] text-white border border-white/10 shadow-[0_16px_34px_rgba(15,23,42,0.35)]'
-      : 'bg-white/92 text-slate-800 border border-white/60 shadow-[0_10px_24px_rgba(15,23,42,0.05)] backdrop-blur-sm',
-    progressTrackClass: isDarkMode ? 'bg-black/20' : 'bg-slate-100',
-    progressFillClass: isDarkMode ? 'bg-[#FF7A00]' : 'bg-[#FF5A1F]',
+      ? 'bg-[linear-gradient(145deg,rgba(18,22,30,0.82),rgba(11,14,20,0.9))] text-white border border-white/10 shadow-[0_14px_34px_rgba(2,6,23,0.34)] backdrop-blur-xl'
+      : 'bg-[linear-gradient(145deg,rgba(255,255,255,0.8),rgba(255,255,255,0.62))] text-slate-900 border border-white/75 shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur-xl',
     mutedClass: isDarkMode ? 'text-slate-300' : 'text-slate-500',
-    iconButtonClass: isDarkMode ? 'text-slate-300 hover:bg-white/8' : 'text-slate-400 hover:bg-slate-100',
-    dividerClass: isDarkMode ? 'border-white/10' : 'border-slate-100',
-    bubbleClass: isDarkMode ? 'bg-white/10 text-white' : 'bg-slate-50 text-slate-700',
+    snippetClass: isDarkMode ? 'text-slate-400' : 'text-slate-500',
+    avatarShellClass: isDarkMode ? 'border-white/10 bg-white/6' : 'border-white/80 bg-white/75',
+    buttonClass: 'bg-[#25D366] text-white hover:bg-[#22c55e] shadow-[0_16px_30px_-18px_rgba(37,211,102,0.9)]',
   };
 }
 
@@ -186,6 +107,7 @@ function getStageAccent(stageValue, isDarkMode) {
     return {
       glowClass: 'from-[#ff8a72]/35 via-[#ff5a1f]/15 to-transparent',
       dotClass: 'bg-[#FF5A1F]',
+      lineClass: 'bg-[#FF5A1F]',
       badgeClass: isDarkMode
         ? 'border-orange-400/20 bg-orange-500/12 text-orange-200'
         : 'border-orange-200 bg-orange-50 text-[#FF5A1F]',
@@ -196,6 +118,7 @@ function getStageAccent(stageValue, isDarkMode) {
     return {
       glowClass: 'from-[#b88cff]/35 via-[#8758ff]/15 to-transparent',
       dotClass: 'bg-[#a970ff]',
+      lineClass: 'bg-[#a970ff]',
       badgeClass: isDarkMode
         ? 'border-purple-400/20 bg-purple-500/12 text-purple-200'
         : 'border-purple-200 bg-purple-50 text-purple-700',
@@ -206,6 +129,7 @@ function getStageAccent(stageValue, isDarkMode) {
     return {
       glowClass: 'from-[#6ce0e2]/30 via-[#25D366]/14 to-transparent',
       dotClass: 'bg-[#25D366]',
+      lineClass: 'bg-[#25D366]',
       badgeClass: isDarkMode
         ? 'border-emerald-400/20 bg-emerald-500/12 text-emerald-200'
         : 'border-emerald-200 bg-emerald-50 text-emerald-700',
@@ -216,6 +140,7 @@ function getStageAccent(stageValue, isDarkMode) {
     return {
       glowClass: 'from-rose-400/28 via-rose-500/10 to-transparent',
       dotClass: 'bg-rose-400',
+      lineClass: 'bg-rose-400',
       badgeClass: isDarkMode
         ? 'border-rose-400/20 bg-rose-500/12 text-rose-200'
         : 'border-rose-200 bg-rose-50 text-rose-700',
@@ -226,6 +151,7 @@ function getStageAccent(stageValue, isDarkMode) {
     return {
       glowClass: 'from-slate-400/25 via-slate-500/10 to-transparent',
       dotClass: 'bg-slate-400',
+      lineClass: 'bg-slate-400',
       badgeClass: isDarkMode
         ? 'border-slate-400/20 bg-slate-500/10 text-slate-200'
         : 'border-slate-200 bg-slate-100 text-slate-700',
@@ -236,6 +162,7 @@ function getStageAccent(stageValue, isDarkMode) {
     return {
       glowClass: 'from-sky-300/28 via-sky-400/10 to-transparent',
       dotClass: 'bg-sky-400',
+      lineClass: 'bg-sky-400',
       badgeClass: isDarkMode
         ? 'border-sky-400/20 bg-sky-500/10 text-sky-200'
         : 'border-sky-200 bg-sky-50 text-sky-700',
@@ -245,6 +172,7 @@ function getStageAccent(stageValue, isDarkMode) {
   return {
     glowClass: 'from-orange-300/28 via-orange-400/10 to-transparent',
     dotClass: 'bg-[#FF7A00]',
+    lineClass: 'bg-[#FF7A00]',
     badgeClass: isDarkMode
       ? 'border-orange-400/20 bg-orange-500/10 text-orange-200'
       : 'border-orange-200 bg-orange-50 text-[#FF5A1F]',
@@ -309,28 +237,53 @@ function getOwnerStack(record, usersById, usersByName) {
   return stack.slice(0, 3);
 }
 
+function getLatestInboxActivity(record) {
+  const history = Array.isArray(record?.historial) ? record.historial : [];
+  if (history.length === 0) return null;
+
+  return history
+    .slice()
+    .sort((left, right) => new Date(right?.fecha || 0).getTime() - new Date(left?.fecha || 0).getTime())[0];
+}
+
+function getPipelineCardSnippet(record) {
+  const lastMessage = String(record?.__lastMessageText || '').trim();
+  if (lastMessage) return lastMessage;
+
+  const note = String(record?.nota || '').trim();
+  if (note) return note;
+
+  const latestHistory = getLatestInboxActivity(record);
+  if (latestHistory?.accion) return String(latestHistory.accion).trim();
+
+  return String(record?.origen || '').trim() || 'Sin mensajes todavia';
+}
+
+function getPrimaryIdentifier(record) {
+  const safeName = String(record?.nombre || '').trim();
+  if (safeName) return safeName;
+
+  const safePhone = String(record?.numero || '').trim();
+  if (safePhone) return safePhone;
+
+  return 'Sin nombre';
+}
+
 function buildPipelineCard(record, usersById, usersByName, isDarkMode) {
   const normalizedStage = normalizePipelineStage(record.pipeline_stage, record);
   const score = calcularPuntajeLead(record);
-  const progress = Math.max(
-    STAGE_PROGRESS[normalizedStage] || 0,
-    normalizedStage === PIPELINE_STAGE_VALUES.CUSTOMER ? 100 : Math.min(100, Math.round(score * 0.7)),
-  );
   const lastActivityDate = getRecordLastActivity(record);
-  const historyCount = Array.isArray(record.historial) ? record.historial.length : 0;
 
   return {
     ...record,
     normalizedStage,
     stageMeta: getPipelineStageMeta(normalizedStage, record),
-    progress,
     score,
     timeLabel: formatRelativeTime(lastActivityDate),
     lastActivityDate,
-    historyCount,
     ownerStack: getOwnerStack(record, usersById, usersByName),
-    subtitle: record.sector || record.origen || record.categoria || 'Sin clasificar',
-    footerLabel: record.nombre || 'Sin nombre',
+    primaryLabel: getPrimaryIdentifier(record),
+    snippet: getPipelineCardSnippet(record),
     theme: getCardTheme(normalizedStage, isDarkMode),
   };
 }
@@ -343,8 +296,8 @@ function PipelineLeadCard({
   onDragStart,
   onDragEnd,
   onSelect,
+  onOpenChat,
 }) {
-  const isBrightCard = [PIPELINE_STAGE_VALUES.CUSTOMER].includes(card.normalizedStage);
   const accent = getStageAccent(card.normalizedStage, isDarkMode);
 
   return (
@@ -353,44 +306,46 @@ function PipelineLeadCard({
       onDragStart={() => onDragStart(card.id)}
       onDragEnd={onDragEnd}
       onClick={() => onSelect?.(card)}
-      className={`pipeline-lead-card ${card.theme.cardClass} ${isDragging ? 'scale-[0.98] opacity-60' : 'opacity-100'} group relative cursor-pointer overflow-hidden rounded-[1.65rem] border p-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_45px_-28px_rgba(15,23,42,0.4)]`}
+      className={`pipeline-lead-card ${card.theme.cardClass} ${isDragging ? 'scale-[0.98] opacity-60' : 'opacity-100'} group relative cursor-pointer overflow-hidden rounded-[1.4rem] border px-3 py-3 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_45px_-28px_rgba(15,23,42,0.24)]`}
     >
-      <div className={`pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-r ${accent.glowClass} opacity-90`}></div>
-      <div className="pointer-events-none absolute inset-[1px] rounded-[1.5rem] border border-white/8 opacity-60"></div>
-      {card.normalizedStage !== PIPELINE_STAGE_VALUES.NEW && card.normalizedStage !== PIPELINE_STAGE_VALUES.COLD_LEAD ? (
-        <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-white/14 blur-2xl"></div>
-      ) : null}
+      <div className={`pointer-events-none absolute left-0 top-3 bottom-3 w-1 rounded-full ${accent.lineClass}`}></div>
+      <div className={`pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r ${accent.glowClass} opacity-80`}></div>
+      <div className="pointer-events-none absolute inset-[1px] rounded-[1.32rem] border border-white/8 opacity-55"></div>
 
-      <div className="relative z-10">
-        <div className="flex min-h-[4.25rem] items-center justify-between gap-3">
-          <div className="flex flex-1 items-center gap-3">
-            {card.ownerStack.length === 0 ? (
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold shadow-[0_8px_20px_-16px_rgba(15,23,42,0.45)] ${card.theme.bubbleClass}`}>
-                NA
-              </div>
-            ) : (
-              <>
-                {card.ownerStack.slice(0, 2).map((user) => (
-                  <div key={user.id || user.email || user.nombre} className="shrink-0 rounded-full ring-2 ring-black/5">
-                    <AvatarInitials
-                      name={user.nombre}
-                      avatarUrl={user.avatarUrl}
-                      size="sm"
-                      isDarkMode={isDarkMode}
-                    />
-                  </div>
-                ))}
-                {card.ownerStack.length > 2 ? (
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${card.theme.bubbleClass}`}>
-                    +{card.ownerStack.length - 2}
-                  </div>
-                ) : null}
-              </>
-            )}
+      <div className="relative z-10 flex items-center gap-3">
+        <div className={`rounded-full border p-0.5 shadow-[0_10px_20px_-18px_rgba(15,23,42,0.45)] ${card.theme.avatarShellClass}`}>
+          <AvatarInitials
+            name={card.primaryLabel}
+            avatarUrl={card.__avatarUrl || ''}
+            size="md"
+            isDarkMode={isDarkMode}
+          />
+        </div>
 
-            <div className={`truncate text-[0.95rem] font-bold leading-tight ${isBrightCard ? 'text-[#081b12]' : 'text-white'}`}>
-              {card.footerLabel}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className={`truncate text-[0.97rem] font-bold leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                {card.primaryLabel}
+              </p>
+              <p className={`mt-1 line-clamp-2 text-[12px] leading-5 ${card.theme.snippetClass}`}>
+                {card.snippet}
+              </p>
             </div>
+            <button
+              type="button"
+              draggable={false}
+              onClick={(event) => {
+                event.stopPropagation();
+                onOpenChat?.(card);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all ${card.theme.buttonClass}`}
+              aria-label="Abrir chat en WhatsApp"
+              title="Abrir chat"
+            >
+              <MessageCircle size={17} strokeWidth={2.4} />
+            </button>
           </div>
         </div>
       </div>
@@ -411,6 +366,7 @@ function PipelineColumn({
   onDragEnd,
   draggedRecordId,
   onSelectRecord,
+  onOpenChat,
 }) {
   const meta = getPipelineStageMeta(stageValue);
   const accent = getStageAccent(stageValue, isDarkMode);
@@ -455,6 +411,7 @@ function PipelineColumn({
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
             onSelect={onSelectRecord}
+            onOpenChat={onOpenChat}
           />
         ))}
 
@@ -478,6 +435,7 @@ export function PipelineView({
   onSelectRecord,
   isViewOnly = false,
   isDarkMode = false,
+  setActiveTab,
 }) {
   const [view, setView] = useState('Active');
   const [draggedRecordId, setDraggedRecordId] = useState('');
@@ -645,6 +603,22 @@ export function PipelineView({
     resetDragState();
   };
 
+  const handleOpenChat = (card) => {
+    if (typeof window !== 'undefined' && card?.id) {
+      try {
+        window.sessionStorage.setItem('crm-workspace-target-conversation', JSON.stringify({
+          leadId: card.id,
+          inboxFilter: 'bigdata',
+          workspaceTab: ARCHIVED_VIEW_STAGES.includes(card.normalizedStage) ? 'archived' : 'active',
+        }));
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    setActiveTab?.('prospecting');
+  };
+
   const handleBoardPointerDown = (event) => {
     if (!boardRef.current) return;
     if (event.target.closest('[draggable="true"]')) return;
@@ -779,6 +753,7 @@ export function PipelineView({
                         handleDropOnStage(column.stageValue);
                       }}
                       onSelectRecord={onSelectRecord}
+                      onOpenChat={handleOpenChat}
                     />
                   ))}
                 </div>
