@@ -15,7 +15,7 @@ import {
 } from '../lib/lead-pipeline';
 import { buildLeadIdentity } from '../lib/lead-utils';
 import { normalizeSectorCode } from '../lib/sector-utils';
-import { clearWhatsAppQrCache, getWhatsAppQrCache, setWhatsAppQrCache } from '../lib/whatsapp-cache';
+import { clearWhatsAppQrCache } from '../lib/whatsapp-cache';
 import { useSectors } from '../hooks/useSectors';
 
 const InputUI = ({ label, ...props }) => (
@@ -98,7 +98,6 @@ const buildPipelineFields = (stageValue) => {
 export function AddRecordView({ records, duplicateRecords = [], setRecords, setActiveTab, setDuplicateRecords, t, isViewOnly, currentUser, onCreateRecord, onImportRecords }) {
   const { activeSectors } = useSectors();
   const workspaceId = currentUser?.workspaceId || '';
-  const cachedWaQr = getWhatsAppQrCache(workspaceId);
   const [inputMode, setInputMode] = useState('whatsapp');
   const [whatsAppMode, setWhatsAppMode] = useState('wa-group');
   const [massiveData, setMassiveData] = useState('');
@@ -106,17 +105,17 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
   const [waSector, setWaSector] = useState('TRA');
   const [waQrSector, setWaQrSector] = useState('TRA');
   const [waNota, setWaNota] = useState('');
-  const [waQrGroups, setWaQrGroups] = useState(() => cachedWaQr.groups || []);
-  const [selectedWaQrGroup, setSelectedWaQrGroup] = useState(() => cachedWaQr.selectedGroup || '');
-  const [selectedWaQrGroupIds, setSelectedWaQrGroupIds] = useState(() => cachedWaQr.selectedGroupIds || []);
-  const [selectedWaQrGroupMeta, setSelectedWaQrGroupMeta] = useState(() => cachedWaQr.selectedGroupMeta || null);
+  const [waQrGroups, setWaQrGroups] = useState([]);
+  const [selectedWaQrGroup, setSelectedWaQrGroup] = useState('');
+  const [selectedWaQrGroupIds, setSelectedWaQrGroupIds] = useState([]);
+  const [selectedWaQrGroupMeta, setSelectedWaQrGroupMeta] = useState(null);
   const [isLoadingWaQrGroups, setIsLoadingWaQrGroups] = useState(false);
   const [isLoadingWaQrParticipants, setIsLoadingWaQrParticipants] = useState(false);
   const [waQrConnectionStatus, setWaQrConnectionStatus] = useState('checking');
   const [waQrParticipantLoadProgress, setWaQrParticipantLoadProgress] = useState({ completed: 0, total: 0, startedAt: 0 });
   const [waQrParticipantElapsedSeconds, setWaQrParticipantElapsedSeconds] = useState(0);
-  const [waQrParticipantsByGroup, setWaQrParticipantsByGroup] = useState(() => cachedWaQr.participantsByGroup || {});
-  const [waQrSelection, setWaQrSelection] = useState(() => cachedWaQr.selection || {});
+  const [waQrParticipantsByGroup, setWaQrParticipantsByGroup] = useState({});
+  const [waQrSelection, setWaQrSelection] = useState({});
   const [skippedCountInfo, setSkippedCountInfo] = useState(null);
   const [showWaHelpVideo, setShowWaHelpVideo] = useState(false);
   const [inlineNotice, setInlineNotice] = useState(null);
@@ -262,26 +261,14 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
   }, [isWaQrGroupDropdownOpen]);
 
   useEffect(() => {
-    const cachedSnapshot = getWhatsAppQrCache(workspaceId);
     setWaQrConnectionStatus('checking');
-    setWaQrGroups(Array.isArray(cachedSnapshot?.groups) ? cachedSnapshot.groups : []);
-    setSelectedWaQrGroup(String(cachedSnapshot?.selectedGroup || ''));
-    setSelectedWaQrGroupIds(Array.isArray(cachedSnapshot?.selectedGroupIds) ? cachedSnapshot.selectedGroupIds : []);
-    setSelectedWaQrGroupMeta(cachedSnapshot?.selectedGroupMeta || null);
-    setWaQrParticipantsByGroup(cachedSnapshot?.participantsByGroup && typeof cachedSnapshot.participantsByGroup === 'object' ? cachedSnapshot.participantsByGroup : {});
-    setWaQrSelection(cachedSnapshot?.selection && typeof cachedSnapshot.selection === 'object' ? cachedSnapshot.selection : {});
+    setWaQrGroups([]);
+    setSelectedWaQrGroup('');
+    setSelectedWaQrGroupIds([]);
+    setSelectedWaQrGroupMeta(null);
+    setWaQrParticipantsByGroup({});
+    setWaQrSelection({});
   }, [workspaceId]);
-
-  useEffect(() => {
-    setWhatsAppQrCache(workspaceId, {
-      groups: waQrGroups,
-      selectedGroup: selectedWaQrGroup,
-      selectedGroupIds: selectedWaQrGroupIds,
-      selectedGroupMeta: selectedWaQrGroupMeta,
-      participantsByGroup: waQrParticipantsByGroup,
-      selection: waQrSelection,
-    });
-  }, [selectedWaQrGroup, selectedWaQrGroupIds, selectedWaQrGroupMeta, waQrGroups, waQrParticipantsByGroup, waQrSelection, workspaceId]);
 
   useEffect(() => {
     waQrConnectionStatusRef.current = waQrConnectionStatus;

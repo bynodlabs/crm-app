@@ -20,7 +20,6 @@ import {
   PIPELINE_STAGE_VALUES,
 } from '../lib/lead-pipeline';
 import { getSectorIcon, getSectorLabel } from '../lib/sector-utils';
-import { getWhatsAppInboxCache, setWhatsAppInboxCache } from '../lib/whatsapp-cache';
 import { getWhatsAppCatalog, getWhatsAppQuickReplies, saveWhatsAppCatalog, saveWhatsAppQuickReplies } from '../lib/whatsapp-tools';
 import { LANG_LOCALES } from '../lib/i18n';
 import { calcularPuntajeLead, getProbabilidadObj } from '../lib/lead-utils';
@@ -2550,8 +2549,8 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
   const [workspaceModal, setWorkspaceModal] = useState(null);
   const [notesDraftState, setNotesDraftState] = useState({ leadId: null, value: '' });
   const [workspaceNotice, setWorkspaceNotice] = useState(null);
-  const [whatsAppChats, setWhatsAppChats] = useState(() => getWhatsAppInboxCache(currentUser?.workspaceId).chats || []);
-  const [waChatsConnection, setWaChatsConnection] = useState(() => getWhatsAppInboxCache(currentUser?.workspaceId).connection || null);
+  const [whatsAppChats, setWhatsAppChats] = useState([]);
+  const [waChatsConnection, setWaChatsConnection] = useState(null);
   const [isInboxSourceMenuOpen, setIsInboxSourceMenuOpen] = useState(false);
   const [leftPanelWidth, setLeftPanelWidth] = useState(380);
   const [isResizingPanels, setIsResizingPanels] = useState(false);
@@ -2606,9 +2605,8 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
   }, [showLeadDetails]);
 
   useEffect(() => {
-    const cachedInbox = getWhatsAppInboxCache(workspaceId);
-    setWhatsAppChats(Array.isArray(cachedInbox?.chats) ? cachedInbox.chats : []);
-    setWaChatsConnection(cachedInbox?.connection || null);
+    setWhatsAppChats([]);
+    setWaChatsConnection(null);
   }, [workspaceId]);
 
   useEffect(() => {
@@ -2635,13 +2633,6 @@ export function ProspectingWorkspace({ records, onUpdateRecord, onChangeStatus, 
       // Ignore session storage errors.
     }
   }, [openedInboxKeys, openedInboxStorageKey]);
-
-  useEffect(() => {
-    setWhatsAppInboxCache(workspaceId, {
-      chats: whatsAppChats,
-      connection: waChatsConnection,
-    });
-  }, [waChatsConnection, whatsAppChats, workspaceId]);
 
   const ownerId = currentUser?.id;
   const ownerName = currentUser?.nombre;

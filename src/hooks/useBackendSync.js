@@ -14,6 +14,11 @@ export function useBackendSync({
 
   useEffect(() => {
     if (!sessionToken) {
+      setUsersDb([]);
+      setRecords([]);
+      setDuplicateRecords([]);
+      setSharedLinks([]);
+      setBackendStatus('idle');
       return undefined;
     }
 
