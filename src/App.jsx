@@ -485,9 +485,9 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   const renderQrContent = () => {
     if (qrState === 'loading') {
       return (
-        <div className="flex h-full min-h-[280px] items-center justify-center">
-          <div className={`flex flex-col items-center gap-4 rounded-[1.7rem] border px-8 py-10 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-[#25D366]" />
+        <div className="wa-qr-min flex h-full min-h-[232px] items-center justify-center">
+          <div className={`flex flex-col items-center gap-3 rounded-[1.45rem] border px-6 py-8 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-[#25D366]" />
             <div className="text-center">
               <p className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Generando QR</p>
               <p className={`mt-1 text-xs ${mutedText}`}>Preparando el código para conexión segura.</p>
@@ -499,17 +499,17 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
     if (qrState === 'expired') {
       return (
-        <div className="relative flex min-h-[280px] items-center justify-center overflow-hidden rounded-[1.9rem] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))] p-4">
+        <div className="wa-qr-min relative flex min-h-[232px] items-center justify-center overflow-hidden rounded-[1.65rem] border border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))] p-3.5">
           <div className="absolute inset-0 bg-white/55 backdrop-blur-[2px]" />
           {qrImage ? (
             <div className="relative scale-[0.98] opacity-35">
-              <div className={`relative mx-auto w-fit rounded-[1.7rem] border p-5 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
-                <img src={qrImage} alt="Código QR expirado" className="h-[250px] w-[250px] rounded-2xl object-contain sm:h-[290px] sm:w-[290px]" />
+              <div className={`relative mx-auto w-fit rounded-[1.45rem] border p-4 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
+                <img src={qrImage} alt="Código QR expirado" className="wa-qr-image h-[210px] w-[210px] rounded-[1.2rem] object-contain sm:h-[232px] sm:w-[232px]" />
               </div>
             </div>
           ) : null}
           <div className="absolute inset-0 flex items-center justify-center">
-            <div className={`flex flex-col items-center gap-3 rounded-[1.6rem] border px-6 py-5 shadow-[0_18px_48px_-26px_rgba(15,23,42,0.35)] ${isDarkMode ? 'border-white/10 bg-[#121212]/95 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
+            <div className={`flex flex-col items-center gap-3 rounded-[1.4rem] border px-5 py-4 shadow-[0_18px_48px_-26px_rgba(15,23,42,0.35)] ${isDarkMode ? 'border-white/10 bg-[#121212]/95 text-white' : 'border-slate-200 bg-white text-slate-900'}`}>
               <p className="text-sm font-black">QR expirado</p>
               <p className={`max-w-[220px] text-center text-xs leading-5 ${mutedText}`}>
                 {qrFeedback || 'Genera un nuevo código para continuar con la vinculación.'}
@@ -542,9 +542,9 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
     if (qrState === 'auth') {
       return (
-        <div className={`relative mx-auto flex w-full max-w-[560px] flex-col items-center overflow-hidden rounded-[1.9rem] border px-4 py-4 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
-          <div className={`relative mx-auto w-fit rounded-[1.7rem] border p-4 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
-            <div className={`flex h-[220px] w-[220px] items-center justify-center rounded-2xl border border-dashed sm:h-[250px] sm:w-[250px] ${
+        <div className={`wa-qr-shell relative mx-auto flex w-full max-w-[520px] flex-col items-center overflow-hidden rounded-[1.65rem] border px-3.5 py-3.5 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
+          <div className={`relative mx-auto w-fit rounded-[1.45rem] border p-3.5 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
+            <div className={`wa-qr-placeholder flex h-[200px] w-[200px] items-center justify-center rounded-[1.2rem] border border-dashed sm:h-[228px] sm:w-[228px] ${
               isDarkMode
                 ? 'border-white/10 bg-white/[0.03] text-slate-400'
                 : 'border-slate-200 bg-slate-50 text-slate-400'
@@ -555,10 +555,10 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               </div>
             </div>
           </div>
-          <p className={`mt-4 max-w-[420px] text-center text-xs font-medium ${mutedText}`}>
+          <p className={`mt-3 max-w-[400px] text-center text-xs font-medium ${mutedText}`}>
             {qrFeedback || 'Cuando tu sesion este autorizada, aqui aparecera el codigo QR.'}
           </p>
-          <div className="mt-4 flex justify-center">
+          <div className="mt-3 flex justify-center">
             <button
               type="button"
               onClick={handleVerifyCurrentSession}
@@ -574,10 +574,10 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
 
     if (qrState === 'connected') {
       return (
-        <div className={`flex min-h-[280px] items-center justify-center rounded-[1.9rem] border p-5 ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50/80'}`}>
-          <div className={`w-full max-w-[320px] rounded-[1.7rem] border p-6 text-center shadow-[0_18px_48px_-30px_rgba(16,185,129,0.45)] ${isDarkMode ? 'border-white/10 bg-[#111317] text-white' : 'border-white bg-white text-slate-900'}`}>
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_14px_28px_-18px_rgba(16,185,129,0.65)]">
-              <CheckCircle size={24} />
+        <div className={`wa-qr-min flex min-h-[232px] items-center justify-center rounded-[1.65rem] border p-4 ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10' : 'border-emerald-200 bg-emerald-50/80'}`}>
+          <div className={`w-full max-w-[300px] rounded-[1.45rem] border p-5 text-center shadow-[0_18px_48px_-30px_rgba(16,185,129,0.45)] ${isDarkMode ? 'border-white/10 bg-[#111317] text-white' : 'border-white bg-white text-slate-900'}`}>
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-white shadow-[0_14px_28px_-18px_rgba(16,185,129,0.65)]">
+              <CheckCircle size={22} />
             </div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-500">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
@@ -599,18 +599,18 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
     }
 
     return (
-      <div className={`relative mx-auto w-full max-w-[560px] overflow-hidden rounded-[1.9rem] border px-4 py-4 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
-        <div className={`relative mx-auto w-fit rounded-[1.7rem] border p-4 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
+      <div className={`wa-qr-shell relative mx-auto w-full max-w-[520px] overflow-hidden rounded-[1.65rem] border px-3.5 py-3.5 transition-transform ${isDarkMode ? 'border-white/10 bg-[#0d1012]' : 'border-slate-200 bg-[radial-gradient(circle_at_top,rgba(241,245,249,0.95),rgba(255,255,255,1))]'}`}>
+        <div className={`relative mx-auto w-fit rounded-[1.45rem] border p-3.5 ${isDarkMode ? 'border-white/10 bg-[#111317]' : 'border-slate-200 bg-white'}`}>
           {qrImage ? (
-            <img src={qrImage} alt="Código QR de WhatsApp Web" className="h-[220px] w-[220px] rounded-2xl object-contain sm:h-[250px] sm:w-[250px]" />
+            <img src={qrImage} alt="Código QR de WhatsApp Web" className="wa-qr-image h-[200px] w-[200px] rounded-[1.2rem] object-contain sm:h-[228px] sm:w-[228px]" />
           ) : (
-            <div className="flex h-[220px] w-[220px] items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold text-slate-400 sm:h-[250px] sm:w-[250px]">
+            <div className="wa-qr-placeholder flex h-[200px] w-[200px] items-center justify-center rounded-[1.2rem] bg-slate-100 text-xs font-semibold text-slate-400 sm:h-[228px] sm:w-[228px]">
               Esperando QR...
             </div>
           )}
         </div>
-        <p className={`mt-4 text-center text-xs font-medium ${mutedText}`}>Escanea este código con WhatsApp para vincular tu sesión.</p>
-        <div className="mt-4 flex justify-center">
+        <p className={`mt-3 text-center text-xs font-medium ${mutedText}`}>Escanea este código con WhatsApp para vincular tu sesión.</p>
+        <div className="mt-3 flex justify-center">
           <button
             type="button"
             onClick={handleReloadQr}
@@ -628,80 +628,80 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   };
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto flex w-full max-w-[1450px] flex-col gap-5">
+    <div className="wa-connect-view min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-5 lg:px-6">
+      <div className="mx-auto flex w-full max-w-[1380px] flex-col gap-4">
         <div className="flex items-end justify-between gap-3">
           <div>
-            <h1 className={`text-3xl tracking-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+            <h1 className={`text-[2.35rem] leading-none tracking-tight sm:text-[3rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
               <span className="font-medium">WhatsApp</span>{' '}
               <span className="font-light">Connect</span>
             </h1>
           </div>
-          <div className={`hidden rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] sm:inline-flex ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+          <div className={`hidden rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] sm:inline-flex ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
             Conexión
           </div>
         </div>
 
-        <div className="grid gap-5 xl:grid-cols-[1.18fr_0.82fr]">
-          <section className={`relative overflow-hidden rounded-[2rem] border p-6 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.32)] sm:p-8 ${leftCardClass}`}>
-            <div className={`absolute -left-10 top-6 h-40 w-40 rounded-full blur-3xl ${isDarkMode ? 'bg-[#25D366]/10' : 'bg-emerald-100/80'}`}></div>
-            <div className={`absolute right-0 top-0 h-48 w-48 rounded-full blur-3xl ${isDarkMode ? 'bg-orange-500/8' : 'bg-orange-100/60'}`}></div>
+        <div className="wa-connect-grid grid gap-4 xl:grid-cols-[1.14fr_0.86fr]">
+          <section className={`wa-connect-panel relative overflow-hidden rounded-[1.8rem] border p-5 shadow-[0_18px_42px_-30px_rgba(148,163,184,0.22)] sm:p-6 ${leftCardClass}`}>
+            <div className={`absolute -left-10 top-6 h-32 w-32 rounded-full blur-3xl ${isDarkMode ? 'bg-[#25D366]/10' : 'bg-emerald-100/80'}`}></div>
+            <div className={`absolute right-0 top-0 h-40 w-40 rounded-full blur-3xl ${isDarkMode ? 'bg-orange-500/8' : 'bg-orange-100/60'}`}></div>
 
-            <div className="relative grid gap-8 xl:grid-cols-[0.42fr_0.58fr] xl:items-center">
+            <div className="relative grid gap-6 xl:grid-cols-[0.38fr_0.62fr] xl:items-center">
               <div className="flex max-w-md flex-col justify-center">
-                <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_8px_18px_-12px_rgba(37,211,102,0.75)]">
-                    <WhatsAppIcon className="h-[17px] w-[17px] shrink-0" />
+                <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
+                  <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_8px_18px_-12px_rgba(37,211,102,0.75)]">
+                    <WhatsAppIcon className="h-4 w-4 shrink-0" />
                   </span>
                   WhatsApp Web
                 </div>
-                <h2 className={`text-2xl font-black sm:text-3xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Web (QR)</h2>
-                <p className={`mt-3 max-w-xl text-sm leading-7 sm:text-[15px] ${softText}`}>
+                <h2 className={`text-[1.8rem] font-black leading-tight sm:text-[2.4rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Web (QR)</h2>
+                <p className={`mt-2.5 max-w-xl text-sm leading-6 sm:text-[14px] ${softText}`}>
                   Conecta tu dispositivo escaneando un código.
                 </p>
               </div>
 
-              <div className={`mx-auto w-full max-w-[620px] rounded-[2rem] border p-4 sm:p-5 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
-                <div className="flex items-center justify-between gap-3 pb-4">
+              <div className={`wa-qr-wrapper mx-auto w-full max-w-[580px] rounded-[1.8rem] border p-3.5 sm:p-4 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
+                <div className="flex items-center justify-between gap-3 pb-3">
                   <div>
                     <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${mutedText}`}>Escaneo QR</p>
                     <p className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Vincula tu dispositivo</p>
                   </div>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_24px_-16px_rgba(37,211,102,0.8)]">
-                    <WhatsAppIcon className="h-[25px] w-[25px] shrink-0" />
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_24px_-16px_rgba(37,211,102,0.8)]">
+                    <WhatsAppIcon className="h-[21px] w-[21px] shrink-0" />
                   </div>
                 </div>
                 {renderQrContent()}
-                <div className={`mt-4 rounded-2xl border px-4 py-3 text-xs ${isDarkMode ? 'border-white/8 bg-white/[0.03] text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600'}`}>
+                <div className={`mt-3 rounded-[1.1rem] border px-3 py-2.5 text-[11px] ${isDarkMode ? 'border-white/8 bg-white/[0.03] text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600'}`}>
                   Abre WhatsApp en tu teléfono y escanea este código.
                 </div>
               </div>
             </div>
           </section>
 
-          <section className={`relative overflow-hidden rounded-[2rem] border p-6 shadow-[0_24px_70px_-34px_rgba(15,23,42,0.32)] sm:p-8 ${rightCardClass}`}>
-            <div className={`absolute -right-8 top-10 h-36 w-36 rounded-full blur-3xl ${isDarkMode ? 'bg-violet-500/10' : 'bg-violet-100/70'}`}></div>
-            <div className="relative flex h-full flex-col gap-6">
+          <section className={`wa-connect-panel relative overflow-hidden rounded-[1.8rem] border p-5 shadow-[0_18px_42px_-30px_rgba(148,163,184,0.22)] sm:p-6 ${rightCardClass}`}>
+            <div className={`absolute -right-8 top-10 h-32 w-32 rounded-full blur-3xl ${isDarkMode ? 'bg-violet-500/10' : 'bg-violet-100/70'}`}></div>
+            <div className="relative flex h-full flex-col gap-5">
               <div>
-                <div className="mb-4 flex items-center gap-3">
-                  <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-violet-400/20 bg-violet-500/10 text-violet-300' : 'border-violet-100 bg-violet-50 text-violet-700'}`}>
+                <div className="mb-3 flex items-center gap-2.5">
+                  <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-violet-400/20 bg-violet-500/10 text-violet-300' : 'border-violet-100 bg-violet-50 text-violet-700'}`}>
                     Recomendado
                   </div>
-                  <div className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
+                  <div className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
                     Oficial
                   </div>
                 </div>
-                <h2 className={`text-2xl font-black sm:text-3xl ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Business API</h2>
-                <p className={`mt-3 max-w-none text-sm leading-6 sm:text-[15px] ${softText}`}>
+                <h2 className={`text-[1.8rem] font-black leading-tight sm:text-[2.35rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Business API</h2>
+                <p className={`mt-2.5 max-w-none text-sm leading-6 sm:text-[14px] ${softText}`}>
                   Conexión oficial para empresas. Requiere Facebook Business.
                 </p>
               </div>
 
-              <div className={`rounded-[1.75rem] border p-5 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/80'}`}>
-                <div className="grid gap-3 sm:grid-cols-2">
+              <div className={`rounded-[1.5rem] border p-4 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/80'}`}>
+                <div className="grid gap-2.5 sm:grid-cols-2">
                   {benefits.map((item) => (
-                    <div key={item} className={`flex items-center gap-3 rounded-2xl px-3 py-3 text-[13px] font-medium leading-5 ${isDarkMode ? 'bg-white/[0.04] text-slate-200' : 'bg-white text-slate-700 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.22)]'}`}>
-                      <CheckCircle size={16} className="text-emerald-500" />
+                    <div key={item} className={`flex items-center gap-2.5 rounded-[1.1rem] px-3 py-2.5 text-[12px] font-medium leading-5 ${isDarkMode ? 'bg-white/[0.04] text-slate-200' : 'bg-white text-slate-700 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.22)]'}`}>
+                      <CheckCircle size={15} className="text-emerald-500" />
                       <span>{item}</span>
                     </div>
                   ))}
@@ -711,18 +711,85 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
               <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-5 py-3 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
+                  className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-[18px] py-2.5 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
                 >
                   Configurar API Oficial
                 </button>
-                <div className={`flex items-center gap-2 text-sm ${mutedText}`}>
-                  <Lock size={16} />
+                <div className={`flex items-center gap-2 text-[13px] ${mutedText}`}>
+                  <Lock size={15} />
                   Requiere acceso de Facebook Business
                 </div>
               </div>
             </div>
           </section>
         </div>
+
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media (min-width: 1280px) and (max-height: 940px) {
+            .wa-connect-view {
+              padding-top: 0.85rem;
+              padding-bottom: 0.85rem;
+            }
+
+            .wa-connect-view .wa-connect-grid {
+              gap: 0.85rem;
+            }
+
+            .wa-connect-view .wa-connect-panel {
+              padding: 1.15rem;
+            }
+
+            .wa-connect-view .wa-qr-wrapper {
+              max-width: 540px;
+            }
+
+            .wa-connect-view .wa-qr-shell {
+              max-width: 480px;
+              padding: 0.75rem;
+            }
+
+            .wa-connect-view .wa-qr-min {
+              min-height: 208px;
+            }
+
+            .wa-connect-view .wa-qr-image,
+            .wa-connect-view .wa-qr-placeholder {
+              width: 192px;
+              height: 192px;
+            }
+          }
+
+          @media (min-width: 1280px) and (max-height: 860px) {
+            .wa-connect-view > div {
+              gap: 0.75rem;
+            }
+
+            .wa-connect-view .wa-connect-panel {
+              border-radius: 1.55rem;
+              padding: 1rem;
+            }
+
+            .wa-connect-view .wa-qr-wrapper {
+              max-width: 500px;
+              padding: 0.75rem;
+            }
+
+            .wa-connect-view .wa-qr-shell {
+              max-width: 440px;
+              padding: 0.7rem;
+            }
+
+            .wa-connect-view .wa-qr-min {
+              min-height: 188px;
+            }
+
+            .wa-connect-view .wa-qr-image,
+            .wa-connect-view .wa-qr-placeholder {
+              width: 176px;
+              height: 176px;
+            }
+          }
+        ` }} />
       </div>
     </div>
   );
@@ -1433,7 +1500,7 @@ export default function App() {
         <div className="min-h-0 flex-1 pb-24 lg:pb-0">
         {activeTab === 'home' && <DashboardView records={dashboardDisplayedRecords} allRecords={records} duplicateRecords={duplicateRecords} onSelectRecord={setSelectedRecord} dashboardSectorFilter={dashboardSectorFilter} setDashboardSectorFilter={setDashboardSectorFilter} setActiveTab={setActiveTab} myAgents={myAgents} t={t} currentUser={currentUser} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} onCreateRecord={handleCreateRecord} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} setActiveTab={setActiveTab} />}
-        {activeTab === 'pipeline' && <PipelineView isDarkMode={isDarkMode} />}
+        {activeTab === 'pipeline' && <PipelineView records={records} usersDb={usersDb} currentUser={currentUser} onChangeStatus={handleChangeStatus} onSelectRecord={setSelectedRecord} isViewOnly={isViewOnly} isDarkMode={isDarkMode} />}
         {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
         {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} onOpenWorkspaceConversation={handleOpenWorkspaceConversation} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
         {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} currentUser={currentUser} onVerifySession={handleVerifySession} />}
