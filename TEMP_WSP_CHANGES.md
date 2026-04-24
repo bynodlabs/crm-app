@@ -25,12 +25,22 @@ Fecha: 2026-04-23
 - Ahora abre el chat directo en WhatsApp Web / `wa.me`.
 - Con eso el lead no cambia de etapa ni se mueve al flujo de `Workspace` solo por abrir WhatsApp desde `Directorio`.
 
+## Cambio temporal en WhatsApp QR Group
+
+- En `Anadir Leads > WhatsApp > WhatsApp QR Group` ahora se ocultan comunidades, grupos de anuncios y grupos ligados a comunidades.
+- Solo se listan grupos normales para importacion.
+- La carga de participantes ahora se hace por grupo, de forma secuencial, para evitar picos innecesarios.
+- La vista previa ya no renderiza todo de golpe.
+- La tabla muestra primero 10 contactos y va cargando 10 mas conforme el usuario baja.
+- Tambien se dejaron fuera participantes sin numero de telefono resoluble para evitar ruido y carga innecesaria.
+
 ## Archivos tocados
 
 - `src/App.jsx`
 - `src/views/DataTableView.jsx`
 - `src/views/AddRecordView.jsx`
 - `src/views/PipelineView.jsx`
+- `server/src/services/whatsapp-service.js`
 
 ## Guia rapida para revertir
 
@@ -49,6 +59,8 @@ Fecha: 2026-04-23
    `setActiveTab(formData.sendToProspecting ? 'prospecting' : 'database');`
 6. En `src/views/PipelineView.jsx`, restaurar:
    `setActiveTab?.('prospecting');`
+7. En `src/views/AddRecordView.jsx`, quitar el filtro de comunidades y la carga progresiva del preview si quieres volver a mostrar todos los contactos de golpe.
+8. En `server/src/services/whatsapp-service.js`, quitar el filtro de `isCommunity`, `isCommunityAnnounce` y `linkedParent` si quieres volver a listar tambien comunidades y anuncios.
 
 ## Nota
 

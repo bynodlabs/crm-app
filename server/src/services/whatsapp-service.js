@@ -93,6 +93,12 @@ const isLidJid = (value = '') => String(value || '').includes('@lid');
 const normalizeJid = (value = '') => String(value || '').trim();
 
 const isGroupJid = (value = '') => normalizeJid(value).endsWith('@g.us');
+const isRegularImportGroup = (group = {}) => {
+  const normalizedId = normalizeJid(group?.id || '');
+  if (!normalizedId || !isGroupJid(normalizedId)) return false;
+
+  return !group?.isCommunity && !group?.isCommunityAnnounce && !group?.linkedParent;
+};
 
 const isDirectChatJid = (value = '') => {
   const normalized = normalizeJid(value);
@@ -1240,11 +1246,16 @@ export const whatsappService = {
 
     try {
       const groupsMap = await connection.socket.groupFetchAllParticipating();
-      const items = Object.values(groupsMap || {})
-        .filter((group) => isGroupJid(group?.id))
+      const allGroups = Object.values(groupsMap || {}).filter((group) => isGroupJid(group?.id));
+      const items = allGroups
+        .filter((group) => isRegularImportGroup(group))
         .map((group) => ({
           id: group.id,
           name: group.subject || 'Grupo sin nombre',
+          size: Number(group?.size) || 0,
+          linkedParent: group?.linkedParent || '',
+          isCommunity: Boolean(group?.isCommunity),
+          isCommunityAnnounce: Boolean(group?.isCommunityAnnounce),
         }))
         .sort((left, right) => left.name.localeCompare(right.name, 'es', { sensitivity: 'base' }));
 
@@ -1252,6 +1263,7 @@ export const whatsappService = {
         status: 200,
         payload: {
           items,
+          filteredOutCount: Math.max(0, allGroups.length - items.length),
           connection: serializeStatus(connection.session),
         },
       };
@@ -1278,17 +1290,28 @@ export const whatsappService = {
     try {
       const session = connection.session;
       const metadata = await connection.socket.groupMetadata(groupId);
+      if (!isRegularImportGroup(metadata)) {
+        return {
+          status: 400,
+          payload: {
+            error: 'Solo se pueden consultar grupos normales. Las comunidades y sus anuncios quedan ocultos en este modulo.',
+          },
+        };
+      }
+
       const avatarUrl = await resolveGroupAvatarUrl(connection.socket, metadata?.id || groupId);
-      const items = (metadata?.participants || []).map((participant) => ({
-        jid: participant.id,
-        name: extractParticipantName(participant) || session.lidNameMap.get(normalizeJid(participant.id)) || session.lidNameMap.get(normalizeJid(participant.lid)) || '',
-        phoneNumber: resolveParticipantPhoneNumber({
-          ...participant,
-          phoneNumber: participant.phoneNumber || session.lidPhoneMap.get(normalizeJid(participant.id)) || session.lidPhoneMap.get(normalizeJid(participant.lid)) || '',
-        }),
-        isAdmin: Boolean(participant.admin),
-        adminRole: participant.admin || null,
-      }));
+      const items = (metadata?.participants || [])
+        .map((participant) => ({
+          jid: participant.id,
+          name: extractParticipantName(participant) || session.lidNameMap.get(normalizeJid(participant.id)) || session.lidNameMap.get(normalizeJid(participant.lid)) || '',
+          phoneNumber: resolveParticipantPhoneNumber({
+            ...participant,
+            phoneNumber: participant.phoneNumber || session.lidPhoneMap.get(normalizeJid(participant.id)) || session.lidPhoneMap.get(normalizeJid(participant.lid)) || '',
+          }),
+          isAdmin: Boolean(participant.admin),
+          adminRole: participant.admin || null,
+        }))
+        .filter((participant) => Boolean(participant.phoneNumber));
 
       return {
         status: 200,
@@ -1297,6 +1320,10 @@ export const whatsappService = {
             id: metadata?.id || groupId,
             name: metadata?.subject || 'Grupo sin nombre',
             avatarUrl,
+            size: Number(metadata?.size) || 0,
+            linkedParent: metadata?.linkedParent || '',
+            isCommunity: Boolean(metadata?.isCommunity),
+            isCommunityAnnounce: Boolean(metadata?.isCommunityAnnounce),
           },
           items,
         },
