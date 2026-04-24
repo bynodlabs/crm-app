@@ -5,11 +5,12 @@ Fecha: 2026-04-23
 ## Cambios activos
 
 1. Se ocultaron temporalmente los accesos de `Inicio`, `Workspace` y `Herramientas`.
-2. El menu visible principal quedo en `Directorio`, `Anadir Leads` y `WhatsApp API`.
-3. En `Directorio General > Eliminados` se agrego un boton pequeno llamado `WSP`.
-4. Para entrar a `Workspace / WSP` ahora se pide una contrasena basica.
-5. La contrasena temporal actual es: `Ad1234567890@`
-6. Desde `Directorio`, el icono de WhatsApp abre directo `wa.me` y ya no manda el lead a `Workspace`.
+2. El menu visible principal quedo en `WhatsApp API`, `Anadir Leads` y `Directorio`.
+3. En el menu, `Directorio General` se acorto visualmente a `Directorio`.
+4. En `Directorio General > Eliminados` se agrego un boton pequeno llamado `WSP`.
+5. Para entrar a `Workspace / WSP` ahora se pide una contrasena basica.
+6. La contrasena temporal actual es: `Ad1234567890@`
+7. Desde `Directorio`, el icono de WhatsApp abre directo `wa.me` y ya no manda el lead a `Workspace`.
 
 ## Accesos protegidos con contrasena
 

@@ -1512,9 +1512,9 @@ export default function App() {
   };
 
   const mobilePrimaryNav = [
-    { id: 'database', label: t('nav_dir'), icon: <Users size={18} />, isActive: activeTab === 'database', onClick: () => { setActiveTab('database'); setDbSearchTerm(''); } },
-    { id: 'add', label: t('nav_add'), icon: <PlusCircle size={18} />, isActive: activeTab === 'add', onClick: () => setActiveTab('add') },
     { id: 'whatsapp-api', label: 'WhatsApp API', icon: <WhatsAppIcon className="h-[22px] w-[22px] shrink-0" />, isActive: activeTab === 'whatsapp-api', onClick: () => setActiveTab('whatsapp-api') },
+    { id: 'add', label: t('nav_add'), icon: <PlusCircle size={18} />, isActive: activeTab === 'add', onClick: () => setActiveTab('add') },
+    { id: 'database', label: t('nav_dir'), icon: <Users size={18} />, isActive: activeTab === 'database', onClick: () => { setActiveTab('database'); setDbSearchTerm(''); } },
   ];
 
   const openWorkspace = useCallback((target = null) => {
@@ -1683,9 +1683,9 @@ export default function App() {
         </div>
 
         <nav className="mt-5 flex-1 space-y-1.5 px-0 overflow-y-auto no-scrollbar">
-          <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
-          <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<WhatsAppIcon className="h-[25px] w-[25px] shrink-0" />} label="WhatsApp API" active={activeTab === 'whatsapp-api'} onClick={() => setActiveTab('whatsapp-api')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
+          <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
         </nav>
 
         <div className={`mt-auto transition-all duration-300 ${isSidebarCollapsed ? 'px-3' : 'px-6'}`}>
