@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { 
   Users, 
   PlusCircle, 
-  Home, 
   Sliders,
   ChevronLeft,
   ChevronRight,
@@ -21,7 +20,6 @@ import {
   MapPin,
   Calendar,
   BarChart2,
-  Target,
   Zap,
   CheckCircle,
   FileText,
@@ -31,7 +29,6 @@ import {
   Lock,
   Layers,
   MessageCircle,
-  Grid,
   Clock,
   ArrowRight,
   Filter,
@@ -99,6 +96,8 @@ const FAVICON_VARIANTS = {
   dark: '/favicon-dark.svg',
   pulse: '/favicon-pulse.svg',
 };
+const TEMP_WORKSPACE_PASSWORD = 'Ad1234567890@';
+const getWorkspaceAccessStorageKey = (userId) => `crm-workspace-access:${userId || 'guest'}`;
 
 function ensureFaviconElement() {
   let favicon = document.querySelector('#app-favicon');
@@ -1118,6 +1117,8 @@ export default function App() {
   const [adminOverview, setAdminOverview] = useState({ users: [], records: [], duplicates: [], sharedLinks: [], workspaceLeadCounts: {} });
   const [isSidebarCollapsed, setIsSidebarCollapsed] = usePersistentState(`${STORAGE_KEYS.sidebarCollapsed}:${currentUser?.id || 'guest'}`, false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [hasWorkspaceAccess, setHasWorkspaceAccess] = useState(false);
+  const [isWorkspaceAccessReady, setIsWorkspaceAccessReady] = useState(false);
   
   // Estado para el panel lateral de configuración
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -1135,6 +1136,7 @@ export default function App() {
   const t = (key) => translate(language, key);
   const fmt = (key, values = {}) =>
     Object.entries(values).reduce((acc, [entryKey, entryValue]) => acc.replaceAll(`{${entryKey}}`, String(entryValue)), t(key));
+  const workspaceAccessStorageKey = getWorkspaceAccessStorageKey(currentUser?.id);
 
   useEffect(() => {
     const favicon = ensureFaviconElement();
@@ -1225,6 +1227,21 @@ export default function App() {
       isCancelled = true;
     };
   }, [currentUser?.rol]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setHasWorkspaceAccess(false);
+      setIsWorkspaceAccessReady(true);
+      return;
+    }
+
+    const nextValue = currentUser?.id
+      ? window.sessionStorage.getItem(workspaceAccessStorageKey) === 'granted'
+      : false;
+
+    setHasWorkspaceAccess(nextValue);
+    setIsWorkspaceAccessReady(true);
+  }, [currentUser?.id, workspaceAccessStorageKey]);
 
   const effectiveAdminUsers = useMemo(
     () => (currentUser?.rol === 'admin' ? adminOverview.users || [] : usersDb),
@@ -1494,23 +1511,19 @@ export default function App() {
     return summary;
   };
 
-  const isHomeLikeTab = activeTab === 'home' || activeTab === 'reports' || activeTab === 'god-panel';
   const mobilePrimaryNav = [
-    { id: 'home', label: t('nav_home'), icon: <Home size={18} />, isActive: isHomeLikeTab, onClick: () => setActiveTab('home') },
-    { id: 'prospecting', label: t('nav_sales'), icon: <Target size={18} />, isActive: activeTab === 'prospecting' || activeTab === 'pipeline', onClick: () => setActiveTab('prospecting') },
     { id: 'database', label: t('nav_dir'), icon: <Users size={18} />, isActive: activeTab === 'database', onClick: () => { setActiveTab('database'); setDbSearchTerm(''); } },
     { id: 'add', label: t('nav_add'), icon: <PlusCircle size={18} />, isActive: activeTab === 'add', onClick: () => setActiveTab('add') },
-    { id: 'tools', label: 'Herramientas', icon: <Grid size={18} />, isActive: activeTab === 'tools' || activeTab === 'network', onClick: () => setActiveTab('tools') },
+    { id: 'whatsapp-api', label: 'WhatsApp API', icon: <WhatsAppIcon className="h-[22px] w-[22px] shrink-0" />, isActive: activeTab === 'whatsapp-api', onClick: () => setActiveTab('whatsapp-api') },
   ];
 
-  const handleOpenWorkspaceConversation = useCallback((record) => {
-    const isArchivedRecord = isArchivedLead(record);
-    if (typeof window !== 'undefined' && record?.id) {
+  const openWorkspace = useCallback((target = null) => {
+    if (typeof window !== 'undefined' && target?.leadId) {
       try {
         window.sessionStorage.setItem('crm-workspace-target-conversation', JSON.stringify({
-          leadId: record.id,
+          leadId: target.leadId,
           inboxFilter: 'bigdata',
-          workspaceTab: isArchivedRecord ? 'archived' : 'active',
+          workspaceTab: target.workspaceTab || 'active',
         }));
       } catch {
         // ignore storage errors
@@ -1519,6 +1532,48 @@ export default function App() {
 
     setActiveTab('prospecting');
   }, [setActiveTab]);
+
+  const requestWorkspaceAccess = useCallback((target = null) => {
+    if (hasWorkspaceAccess) {
+      openWorkspace(target);
+      return true;
+    }
+
+    if (typeof window === 'undefined') {
+      return false;
+    }
+
+    const enteredPassword = window.prompt('Contrasena para entrar a WSP');
+    if (enteredPassword == null) {
+      return false;
+    }
+
+    if (enteredPassword !== TEMP_WORKSPACE_PASSWORD) {
+      setAppNotice({
+        title: 'Acceso bloqueado',
+        message: 'La contrasena de WSP no es correcta.',
+        tone: 'danger',
+      });
+      return false;
+    }
+
+    setHasWorkspaceAccess(true);
+    try {
+      window.sessionStorage.setItem(workspaceAccessStorageKey, 'granted');
+    } catch {
+      // ignore storage errors
+    }
+
+    openWorkspace(target);
+    return true;
+  }, [hasWorkspaceAccess, openWorkspace, workspaceAccessStorageKey]);
+
+  useEffect(() => {
+    if (!isWorkspaceAccessReady) return;
+    if (activeTab === 'prospecting' && !hasWorkspaceAccess) {
+      setActiveTab('database');
+    }
+  }, [activeTab, hasWorkspaceAccess, isWorkspaceAccessReady, setActiveTab]);
 
   const handleMobileNavClick = (handler) => {
     setIsMobileMenuOpen(false);
@@ -1628,13 +1683,9 @@ export default function App() {
         </div>
 
         <nav className="mt-5 flex-1 space-y-1.5 px-0 overflow-y-auto no-scrollbar">
-          <NavItem icon={<Home size={20} />} label={t('nav_home')} active={activeTab === 'home' || activeTab === 'reports'} onClick={() => setActiveTab('home')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
-          <NavItem icon={<Target size={20} />} label={t('nav_sales')} active={activeTab === 'prospecting' || activeTab === 'pipeline'} onClick={() => setActiveTab('prospecting')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<WhatsAppIcon className="h-[25px] w-[25px] shrink-0" />} label="WhatsApp API" active={activeTab === 'whatsapp-api'} onClick={() => setActiveTab('whatsapp-api')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
-          <div className={`my-2 border-t border-slate-100 ${isSidebarCollapsed ? 'mx-4' : 'mx-6'}`}></div>
-          <NavItem icon={<Grid size={20} />} label="Herramientas" active={activeTab === 'tools' || activeTab === 'network'} onClick={() => setActiveTab('tools')} theme="purple" isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
         </nav>
 
         <div className={`mt-auto transition-all duration-300 ${isSidebarCollapsed ? 'px-3' : 'px-6'}`}>
@@ -1729,13 +1780,6 @@ export default function App() {
                 >
                   {t('dash_metrics')}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleMobileNavClick(() => setActiveTab('tools'))}
-                  className={`rounded-2xl px-4 py-3 text-left text-sm font-bold transition-all ${(activeTab === 'tools' || activeTab === 'network') ? (isDarkMode ? 'bg-orange-500/15 text-[#FF8A57]' : 'bg-orange-50 text-[#FF5A1F]') : (isDarkMode ? 'bg-[#151515] text-slate-300 hover:bg-[#1a1a1a] hover:text-[#FF5A1F]' : 'bg-slate-50 text-slate-600 hover:bg-orange-50 hover:text-[#FF5A1F]')}`}
-                >
-                  Herramientas
-                </button>
                 {currentUser?.rol === 'admin' && (
                   <button
                     type="button"
@@ -1790,9 +1834,9 @@ export default function App() {
         <div className="min-h-0 flex-1 pb-24 lg:pb-0">
         {activeTab === 'home' && <DashboardView records={dashboardDisplayedRecords} allRecords={records} duplicateRecords={duplicateRecords} onSelectRecord={setSelectedRecord} dashboardSectorFilter={dashboardSectorFilter} setDashboardSectorFilter={setDashboardSectorFilter} setActiveTab={setActiveTab} myAgents={myAgents} t={t} currentUser={currentUser} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'prospecting' && <ProspectingWorkspace records={displayedRecords} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onAutoSelect={handleAutoSelectLeads} onArchiveRecord={handleArchiveWorkspaceLead} onRemoveFromWorkspace={handleRemoveFromWorkspaceCompletely} onCreateRecord={handleCreateRecord} myAgents={myAgents} waTemplate={waTemplate} setWaTemplate={setWaTemplate} t={t} currentUser={currentUser} language={language} isViewOnly={isViewOnly} isDarkMode={isDarkMode} setActiveTab={setActiveTab} />}
-        {activeTab === 'pipeline' && <PipelineView records={records} usersDb={usersDb} currentUser={currentUser} onChangeStatus={handleChangeStatus} onSelectRecord={setSelectedRecord} isViewOnly={isViewOnly} isDarkMode={isDarkMode} setActiveTab={setActiveTab} />}
-        {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} />}
-        {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} onOpenWorkspaceConversation={handleOpenWorkspaceConversation} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} setActiveTab={setActiveTab} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
+        {activeTab === 'pipeline' && <PipelineView records={records} usersDb={usersDb} currentUser={currentUser} onChangeStatus={handleChangeStatus} onSelectRecord={setSelectedRecord} isViewOnly={isViewOnly} isDarkMode={isDarkMode} onRequestWorkspaceAccess={requestWorkspaceAccess} />}
+        {activeTab === 'add' && <AddRecordView records={records} duplicateRecords={duplicateRecords} setRecords={setRecords} setActiveTab={setActiveTab} setDuplicateRecords={setDuplicateRecords} t={t} isViewOnly={isViewOnly} currentUser={currentUser} onCreateRecord={handleCreateRecord} onImportRecords={handleImportRecords} onRequestWorkspaceAccess={requestWorkspaceAccess} />}
+        {activeTab === 'database' && <DataTableView records={records} onSelectRecord={setSelectedRecord} searchTerm={dbSearchTerm} setSearchTerm={setDbSearchTerm} onRequestWorkspaceAccess={requestWorkspaceAccess} onUpdateRecord={handleUpdateRecord} onChangeStatus={handleChangeStatus} onBulkChangeStatus={handleBulkChangeStatus} onPermanentDeleteRecords={handlePermanentDeleteRecords} myAgents={myAgents} duplicateRecords={duplicateRecords} onCleanDuplicates={handleCleanDuplicates} onDeleteDuplicates={handleDeleteDuplicates} onRestoreDuplicates={handleRestoreDuplicates} sharedLinks={sharedLinks} t={t} currentUser={currentUser} globalSectorFilter={globalSectorFilter} setGlobalSectorFilter={setGlobalSectorFilter} isDarkMode={isDarkMode} />}
         {activeTab === 'whatsapp-api' && <WhatsAppApiView isDarkMode={isDarkMode} sessionToken={sessionToken} currentUser={currentUser} onVerifySession={handleVerifySession} />}
         {activeTab === 'reports' && <ReportsView records={records} duplicateRecords={duplicateRecords} currentUser={currentUser} myAgents={myAgents} usersDb={usersDb} sharedLinks={sharedLinks} t={t} language={language} isDarkMode={isDarkMode} />}
         {activeTab === 'tools' && <ToolsView isDarkMode={isDarkMode} onOpenShareLeads={() => setActiveTab('network')} records={records} currentUser={currentUser} onBulkChangeStatus={handleBulkChangeStatus} />}
@@ -1801,7 +1845,7 @@ export default function App() {
       </main>
 
         <div className={`lg:hidden fixed inset-x-0 bottom-0 z-40 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl ${isDarkMode ? 'border-t border-white/10 bg-[#050505]/94' : 'border-t border-slate-200/70 bg-white/90'}`}>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {mobilePrimaryNav.map((item) => (
               <button
                 key={item.id}

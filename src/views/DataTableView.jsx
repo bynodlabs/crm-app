@@ -1,5 +1,5 @@
 import React, { useDeferredValue, useMemo, useState } from 'react';
-import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, MessageCircle, Search, Sliders, Trash2, User, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Download, Filter, Grid, Layers, MessageCircle, Search, Sliders, Target, Trash2, User, X } from 'lucide-react';
 import { AvatarInitials } from '../components/AvatarInitials';
 import { ORIGENES, PAISES } from '../lib/constants';
 import { getCountryMetaForRecord } from '../lib/country';
@@ -100,7 +100,7 @@ const downloadCsvFile = (filename, headers, rows) => {
   URL.revokeObjectURL(url);
 };
 
-export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversation, searchTerm, setSearchTerm, onChangeStatus, onBulkChangeStatus, onPermanentDeleteRecords, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
+export function DataTableView({ records, onSelectRecord, searchTerm, setSearchTerm, onRequestWorkspaceAccess, onChangeStatus, onBulkChangeStatus, onPermanentDeleteRecords, myAgents, duplicateRecords, onCleanDuplicates, onDeleteDuplicates, onRestoreDuplicates, sharedLinks = [], t, globalSectorFilter = 'ALL', setGlobalSectorFilter, isDarkMode = false }) {
   const { sectors, visibleSectors } = useSectors({ records });
   const [showFilters, setShowFilters] = useState(false);
   const [showExportPanel, setShowExportPanel] = useState(false);
@@ -416,6 +416,15 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
   };
 
   const activeFiltersCount = Object.values(filters).filter(v => v !== 'ALL').length + (globalSectorFilter !== 'ALL' ? 1 : 0);
+  const showDiscardedWorkspaceShortcut = directoryTab === 'descartados';
+  const handleOpenDirectoryWhatsApp = (record) => {
+    if (typeof window === 'undefined') return;
+
+    const cleanNumber = normalizePhoneDigits(record?.numero || '');
+    if (!cleanNumber) return;
+
+    window.open(`https://wa.me/${cleanNumber}`, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="relative flex h-full min-h-0 max-h-full flex-1 basis-0 flex-col overflow-hidden bg-slate-50/30 p-4 sm:p-6 lg:p-8">
@@ -468,9 +477,22 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                 {t('dir_tab_discarded')}
               </button>
             </div>
-            <p className="ml-1 text-xs font-medium text-slate-400 sm:ml-2">
-              {t('dir_showing')} {directoryTotal} {t('dir_prospects')} {directoryTotal > 0 && <span className="ml-1">· página {currentDisplayPage}/{directoryTotalPages}</span>}
-            </p>
+            <div className="ml-1 flex flex-wrap items-center gap-2 sm:ml-2">
+              <p className="text-xs font-medium text-slate-400">
+                {t('dir_showing')} {directoryTotal} {t('dir_prospects')} {directoryTotal > 0 && <span className="ml-1">· página {currentDisplayPage}/{directoryTotalPages}</span>}
+              </p>
+              {showDiscardedWorkspaceShortcut ? (
+                <button
+                  type="button"
+                  onClick={() => onRequestWorkspaceAccess?.()}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1.5 text-[11px] font-bold text-[#FF5A1F] transition-colors hover:bg-orange-100"
+                  title="Abrir WSP"
+                >
+                  <Target size={12} />
+                  <span>WSP</span>
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center gap-3 xl:w-auto">
@@ -935,7 +957,7 @@ export function DataTableView({ records, onSelectRecord, onOpenWorkspaceConversa
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onOpenWorkspaceConversation?.(r);
+                          handleOpenDirectoryWhatsApp(r);
                         }}
                         title={t('dir_open_conversation')}
                         className="p-2 rounded-full text-slate-300 hover:text-[#25D366] hover:bg-emerald-50 transition-colors"

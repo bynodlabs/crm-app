@@ -95,7 +95,7 @@ const buildPipelineFields = (stageValue) => {
   };
 };
 
-export function AddRecordView({ records, duplicateRecords = [], setRecords, setActiveTab, setDuplicateRecords, t, isViewOnly, currentUser, onCreateRecord, onImportRecords }) {
+export function AddRecordView({ records, duplicateRecords = [], setRecords, setActiveTab, setDuplicateRecords, t, isViewOnly, currentUser, onCreateRecord, onImportRecords, onRequestWorkspaceAccess }) {
   const { activeSectors } = useSectors();
   const workspaceId = currentUser?.workspaceId || '';
   const [inputMode, setInputMode] = useState('whatsapp');
@@ -428,7 +428,12 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
       setRecords([newRecord, ...records]);
     }
 
-    setActiveTab(formData.sendToProspecting ? 'prospecting' : 'database');
+    if (formData.sendToProspecting) {
+      onRequestWorkspaceAccess?.();
+      return;
+    }
+
+    setActiveTab('database');
   };
 
   const handleFileUpload = (e) => {

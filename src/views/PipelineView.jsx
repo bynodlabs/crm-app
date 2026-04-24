@@ -435,7 +435,7 @@ export function PipelineView({
   onSelectRecord,
   isViewOnly = false,
   isDarkMode = false,
-  setActiveTab,
+  onRequestWorkspaceAccess,
 }) {
   const [view, setView] = useState('Active');
   const [draggedRecordId, setDraggedRecordId] = useState('');
@@ -616,7 +616,10 @@ export function PipelineView({
       }
     }
 
-    setActiveTab?.('prospecting');
+    onRequestWorkspaceAccess?.({
+      leadId: card?.id,
+      workspaceTab: ARCHIVED_VIEW_STAGES.includes(card.normalizedStage) ? 'archived' : 'active',
+    });
   };
 
   const handleBoardPointerDown = (event) => {
