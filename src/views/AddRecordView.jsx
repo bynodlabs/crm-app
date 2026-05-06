@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, Download, FileText, MessageCircle, Play, User, Users, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, ChevronUp, Download, FileText, MessageCircle, Play, Search, User, Users, X } from 'lucide-react';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { ORIGENES, PAISES } from '../lib/constants';
 import { api } from '../lib/api';
@@ -123,7 +123,9 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
   const [skippedCountInfo, setSkippedCountInfo] = useState(null);
   const [showWaHelpVideo, setShowWaHelpVideo] = useState(false);
   const [inlineNotice, setInlineNotice] = useState(null);
-  const [isWaQrGroupDropdownOpen, setIsWaQrGroupDropdownOpen] = useState(false);
+  const [isWaQrGroupDropdownOpen, setIsWaQrGroupDropdownOpen] = useState(true);
+  const [isExportedGroupsExpanded, setIsExportedGroupsExpanded] = useState(false);
+  const [waQrGroupSearch, setWaQrGroupSearch] = useState('');
   const [showWaQrExportPanel, setShowWaQrExportPanel] = useState(false);
   const [confirmWaQrCsvDownload, setConfirmWaQrCsvDownload] = useState(null);
   const [selectedWaQrCsvFields, setSelectedWaQrCsvFields] = useState(DEFAULT_WA_QR_CSV_FIELD_KEYS);
@@ -897,34 +899,38 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     () => selectedWaQrGroupsData.find((group) => group.id === selectedWaQrGroup) || selectedWaQrGroupsData[0] || null,
     [selectedWaQrGroup, selectedWaQrGroupsData],
   );
-  const exportedWaQrGroupCount = useMemo(() => {
-    const selectedGroupKeys = new Set(
-      selectedWaQrGroupsData
-        .map((group) => normalizeWaGroupLabel(group?.name))
-        .filter(Boolean),
-    );
-    if (selectedGroupKeys.size === 0) return 0;
-
-    const matchesSelectedGroup = (record) => {
+  const waQrGroupsWithStatus = useMemo(() => waQrGroups.map((group) => {
+    const groupKey = normalizeWaGroupLabel(group?.name);
+    const exportedCount = [...records, ...duplicateRecords].filter((record) => {
       if (String(record?.origen || '') !== 'WhatsApp QR Group') {
         return false;
       }
 
       const subsectorKey = normalizeWaGroupLabel(record?.subsector);
       const noteKey = normalizeWaGroupLabel(record?.nota || record?.notes);
-      return Array.from(selectedGroupKeys).some((groupKey) => subsectorKey === groupKey || noteKey.includes(groupKey));
-    };
+      return Boolean(groupKey) && (subsectorKey === groupKey || noteKey.includes(groupKey));
+    }).length;
 
-    return [...records, ...duplicateRecords].filter(matchesSelectedGroup).length;
-  }, [duplicateRecords, normalizeWaGroupLabel, records, selectedWaQrGroupsData]);
-  const hasExportedWaQrGroup = exportedWaQrGroupCount > 0;
-  const allWaQrGroupsSelected = waQrGroups.length > 0 && selectedWaQrGroupIds.length === waQrGroups.length;
-  const waQrSelectedGroupLabel = useMemo(() => {
-    if (selectedWaQrGroupsData.length === 0) return 'Selecciona uno o varios grupos';
-    if (selectedWaQrGroupsData.length === waQrGroups.length && waQrGroups.length > 1) return 'Todos los grupos';
-    if (selectedWaQrGroupsData.length === 1) return selectedWaQrGroupsData[0].name;
-    return `${selectedWaQrGroupsData.length} grupos seleccionados`;
-  }, [selectedWaQrGroupsData, waQrGroups.length]);
+    return {
+      ...group,
+      exportedCount,
+      hasExported: exportedCount > 0,
+    };
+  }), [duplicateRecords, normalizeWaGroupLabel, records, waQrGroups]);
+  const availableWaQrGroups = useMemo(
+    () => waQrGroupsWithStatus.filter((group) => {
+      if (group.hasExported) return false;
+      if (waQrGroupSearch.trim()) {
+        return group.name?.toLowerCase().includes(waQrGroupSearch.toLowerCase());
+      }
+      return true;
+    }),
+    [waQrGroupsWithStatus, waQrGroupSearch],
+  );
+  const exportedWaQrGroups = useMemo(
+    () => waQrGroupsWithStatus.filter((group) => group.hasExported),
+    [waQrGroupsWithStatus],
+  );
   const waQrPreviewContacts = useMemo(
     () => selectedWaQrGroupIds.flatMap((groupId) => {
       const groupMeta = selectedWaQrGroupsData.find((group) => group.id === groupId);
@@ -997,9 +1003,8 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     [waQrSortedPreviewContacts],
   );
   const isWaQrConnectionOpen = waQrConnectionStatus === 'open';
-  const visibleSelectedWaQrGroupsData = isWaQrConnectionOpen ? selectedWaQrGroupsData : [];
-  const visibleSelectedWaQrGroupData = isWaQrConnectionOpen ? selectedWaQrGroupData : null;
-  const waQrAvailablePreviewContacts = isWaQrConnectionOpen ? waQrSortedPreviewContacts : [];
+  const visibleSelectedWaQrGroupsData = useMemo(() => isWaQrConnectionOpen ? selectedWaQrGroupsData : [], [isWaQrConnectionOpen, selectedWaQrGroupsData]);
+  const waQrAvailablePreviewContacts = useMemo(() => isWaQrConnectionOpen ? waQrSortedPreviewContacts : [], [isWaQrConnectionOpen, waQrSortedPreviewContacts]);
   const visibleWaQrPreviewContacts = useMemo(
     () => waQrAvailablePreviewContacts.slice(0, waQrVisiblePreviewCount),
     [waQrAvailablePreviewContacts, waQrVisiblePreviewCount],
@@ -1007,8 +1012,6 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
   const hasMoreWaQrPreviewContacts = visibleWaQrPreviewContacts.length < waQrAvailablePreviewContacts.length;
   const visibleSelectedWaQrCount = isWaQrConnectionOpen ? selectedWaQrCount : 0;
   const visibleWaQrAdminCount = isWaQrConnectionOpen ? waQrAdminCount : 0;
-  const visibleHasExportedWaQrGroup = isWaQrConnectionOpen && hasExportedWaQrGroup;
-  const visibleExportedWaQrGroupCount = isWaQrConnectionOpen ? exportedWaQrGroupCount : 0;
   const waQrParticipantLoadPercent = waQrParticipantLoadProgress.total > 0
     ? Math.min(100, Math.round((waQrParticipantLoadProgress.completed / waQrParticipantLoadProgress.total) * 100))
     : 0;
@@ -1030,6 +1033,30 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     const activeGroupMeta = waQrGroups.find((group) => group.id === selectedWaQrGroup) || null;
     setSelectedWaQrGroupMeta(activeGroupMeta);
   }, [selectedWaQrGroup, waQrGroups]);
+
+  useEffect(() => {
+    if (selectedWaQrGroupIds.length === 0 || exportedWaQrGroups.length === 0) {
+      return;
+    }
+
+    const exportedGroupIds = new Set(exportedWaQrGroups.map((group) => group.id));
+    const nextSelectedIds = selectedWaQrGroupIds.filter((groupId) => !exportedGroupIds.has(groupId));
+
+    if (nextSelectedIds.length === selectedWaQrGroupIds.length) {
+      return;
+    }
+
+    const nextSelectedIdSet = new Set(nextSelectedIds);
+    setSelectedWaQrGroupIds(nextSelectedIds);
+    setSelectedWaQrGroup((current) => (current && nextSelectedIdSet.has(current) ? current : nextSelectedIds[0] || ''));
+    setSelectedWaQrGroupMeta((current) => (current?.id && nextSelectedIdSet.has(current.id) ? current : null));
+    setWaQrSelection((current) => Object.fromEntries(
+      Object.entries(current).filter(([selectionKey]) => {
+        const [groupId] = selectionKey.split('::');
+        return nextSelectedIdSet.has(groupId);
+      }),
+    ));
+  }, [exportedWaQrGroups, selectedWaQrGroupIds]);
 
   useEffect(() => {
     setWaQrVisiblePreviewCount(WA_QR_PREVIEW_BATCH_SIZE);
@@ -1381,21 +1408,23 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
     });
   }, [selectedWaQrGroup]);
 
-  const handleSelectAllWaQrGroups = useCallback(() => {
-    if (waQrGroups.length === 0) return;
+  const handleSelectMax5WaQrGroups = useCallback(() => {
+    if (availableWaQrGroups.length === 0) return;
 
     setSelectedWaQrGroupIds((current) => {
-      if (current.length === waQrGroups.length) {
+      const top5 = availableWaQrGroups.slice(0, 5).map((group) => group.id);
+      const isAlreadyTop5 = top5.every(id => current.includes(id)) && current.length === top5.length;
+      
+      if (isAlreadyTop5) {
         setSelectedWaQrGroup('');
         setSelectedWaQrGroupMeta(null);
         return [];
       }
 
-      const allGroupIds = waQrGroups.map((group) => group.id);
-      setSelectedWaQrGroup(allGroupIds[0] || '');
-      return allGroupIds;
+      setSelectedWaQrGroup(top5[0] || '');
+      return top5;
     });
-  }, [waQrGroups]);
+  }, [availableWaQrGroups]);
 
   const handleToggleWaQrCsvField = useCallback((fieldKey) => {
     setSelectedWaQrCsvFields((current) => {
@@ -1737,119 +1766,108 @@ export function AddRecordView({ records, duplicateRecords = [], setRecords, setA
                     </div>
                   </div>
 
-                  <div className="items-start gap-3 xl:grid xl:grid-cols-[300px_minmax(0,1fr)]">
-                    <div className="relative overflow-hidden rounded-[1.5rem] border border-white/70 bg-white/60 p-3.5 shadow-[0_18px_50px_rgba(15,23,42,0.08)] backdrop-blur-md">
-                      <div className="pointer-events-none absolute -bottom-10 left-4 h-28 w-28 rounded-full bg-[#25D366]/20 blur-3xl" />
-                      <div className="pointer-events-none absolute -bottom-8 right-8 h-24 w-24 rounded-full bg-[#00C853]/16 blur-3xl" />
-                      <label className="relative mb-2 block pl-2 text-[11px] font-bold uppercase tracking-normal text-slate-500">
-                        Seleccionar grupos
-                      </label>
-                      <div ref={waQrGroupDropdownRef} className="group relative">
-                        <div className="pointer-events-none absolute inset-0 rounded-[1.85rem] bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(240,253,244,0.78))] shadow-[0_20px_40px_-24px_rgba(21,128,61,0.45)] transition-all duration-300 group-hover:shadow-[0_24px_48px_-26px_rgba(21,128,61,0.52)]" />
+                  <div className="items-start gap-4 xl:grid xl:grid-cols-[380px_minmax(0,1fr)]">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400 text-white text-[13px] font-bold">1</span>
+                          <h3 className="text-[17px] font-bold text-slate-500">Selecciona los grupos</h3>
+                        </div>
+                        <button type="button" onClick={handleSelectMax5WaQrGroups} className="text-[15px] font-semibold text-emerald-500 hover:text-emerald-600 transition-colors">Seleccionar 5 (Máx)</button>
+                      </div>
+
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 h-[22px] w-[22px]" />
+                        <input
+                          type="text"
+                          placeholder="Buscar grupo..."
+                          value={waQrGroupSearch}
+                          onChange={(e) => setWaQrGroupSearch(e.target.value)}
+                          className="w-full rounded-[1.25rem] border border-slate-200 py-4 pl-12 pr-4 text-base text-slate-600 outline-none focus:border-emerald-300 focus:ring-4 focus:ring-emerald-50 transition-all placeholder:text-slate-300 font-medium"
+                        />
+                      </div>
+
+                      <div className="rounded-[1.25rem] border border-slate-100 bg-white p-4 shadow-sm transition-all duration-300">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!isWaQrConnectionOpen || waQrGroups.length === 0 || isLoadingWaQrGroups) return;
-                            setIsWaQrGroupDropdownOpen((current) => !current);
-                          }}
-                          disabled={!isWaQrConnectionOpen || waQrGroups.length === 0 || isLoadingWaQrGroups}
-                          className="relative flex w-full items-center justify-between gap-4 rounded-[1.85rem] border border-emerald-200/80 bg-white/80 px-5 py-4 text-left text-[15px] font-semibold leading-tight text-slate-700 outline-none backdrop-blur-xl transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300 hover:bg-white/92 focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100/80 disabled:cursor-not-allowed disabled:bg-white/40 disabled:text-slate-400"
+                          onClick={() => setIsWaQrGroupDropdownOpen((prev) => !prev)}
+                          className="flex w-full items-center justify-between mb-2 text-[15px] font-bold text-slate-400 hover:text-slate-600 transition-colors"
                         >
-                          <span className="min-w-0 truncate">
-                            {isLoadingWaQrGroups || waQrConnectionStatus === 'checking'
-                              ? 'Cargando grupos...'
-                              : !isWaQrConnectionOpen || waQrGroups.length === 0
-                                ? 'Sin conexion'
-                                : waQrSelectedGroupLabel}
-                          </span>
-                          <span className="inline-flex items-center gap-2 shrink-0">
-                            {isWaQrConnectionOpen && selectedWaQrGroupIds.length > 0 ? (
-                              <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
-                                {selectedWaQrGroupIds.length}
-                              </span>
-                            ) : null}
-                            <ChevronDown className={`h-5 w-5 text-emerald-700 transition-transform ${isWaQrGroupDropdownOpen ? 'rotate-180' : ''}`} />
-                          </span>
+                          <span>Grupos disponibles ({availableWaQrGroups.length})</span>
+                          <ChevronUp className={`h-5 w-5 text-slate-300 transition-transform duration-300 ${isWaQrGroupDropdownOpen ? '' : 'rotate-180'}`} />
                         </button>
-
-                        {isWaQrGroupDropdownOpen ? (
-                          <div className="absolute left-0 right-0 top-[calc(100%+0.65rem)] z-30 overflow-hidden rounded-[1.4rem] border border-emerald-100 bg-white/95 p-2 shadow-[0_24px_50px_-24px_rgba(15,23,42,0.3)] backdrop-blur-xl">
-                            <button
-                              type="button"
-                              onClick={handleSelectAllWaQrGroups}
-                              className="flex w-full items-center justify-between rounded-2xl px-3.5 py-3 text-left text-sm font-bold text-slate-700 transition-colors hover:bg-emerald-50"
-                            >
-                              <span className="flex items-center gap-3">
-                                <span className={`flex h-5 w-5 items-center justify-center rounded border text-[11px] ${allWaQrGroupsSelected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
-                                  ✓
-                                </span>
-                                Seleccionar todos
-                              </span>
-                              <span className="text-[10px] uppercase tracking-[0.18em] text-slate-400">
-                                {waQrGroups.length} grupos
-                              </span>
-                            </button>
-
-                            <div className="my-1 h-px bg-slate-100" />
-
-                            <div className="max-h-64 overflow-y-auto">
-                              {waQrGroups.map((group) => {
-                                const isSelected = selectedWaQrGroupIds.includes(group.id);
-                                const isActivePreview = selectedWaQrGroup === group.id;
-
-                                return (
-                                  <button
-                                    key={group.id}
-                                    type="button"
-                                    onClick={() => toggleWaQrGroupSelection(group.id)}
-                                    className={`flex w-full items-center justify-between gap-3 rounded-2xl px-3.5 py-3 text-left transition-colors ${isSelected ? 'bg-emerald-50/80' : 'hover:bg-slate-50'}`}
-                                  >
-                                    <span className="flex min-w-0 items-center gap-3">
-                                      <span className={`flex h-5 w-5 items-center justify-center rounded border text-[11px] ${isSelected ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white text-transparent'}`}>
-                                        ✓
-                                      </span>
-                                      <span className="truncate text-sm font-semibold text-slate-700">{group.name}</span>
-                                    </span>
-                                    {isActivePreview ? (
-                                      <span className="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                                        Vista
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                );
+                        
+                        <div className={`transition-all duration-300 overflow-hidden ${isWaQrGroupDropdownOpen ? 'max-h-[30rem] opacity-100 mt-4' : 'max-h-0 opacity-0 m-0'}`}>
+                          {availableWaQrGroups.length > 0 ? (
+                            <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                              {availableWaQrGroups.map((group) => {
+                                 const isSelected = selectedWaQrGroupIds.includes(group.id);
+                                 return (
+                                   <button
+                                     key={group.id}
+                                     type="button"
+                                     onClick={() => toggleWaQrGroupSelection(group.id)}
+                                     className={`flex w-full items-center gap-3 rounded-xl border p-2 text-left transition-all ${isSelected ? 'border-emerald-200 bg-emerald-50' : 'border-slate-100 bg-white hover:border-emerald-100'}`}
+                                   >
+                                     <span className={`flex h-5 w-5 items-center justify-center rounded text-xs ${isSelected ? 'bg-emerald-500 text-white border-transparent' : 'border border-slate-300 bg-white text-transparent'}`}>
+                                       ✓
+                                     </span>
+                                     <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-white">
+                                       {group.avatarUrl ? (
+                                         <img src={group.avatarUrl} alt={group.name} className="h-full w-full object-contain" />
+                                       ) : (
+                                         <WhatsAppIcon className="h-4 w-4 text-emerald-500" />
+                                       )}
+                                     </span>
+                                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-600">{group.name}</span>
+                                   </button>
+                                 );
                               })}
                             </div>
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className={`pointer-events-none flex justify-center ${visibleSelectedWaQrGroupsData.length > 0 ? 'mt-4' : 'mt-10 mb-8'}`}>
-                        <div className={`flex items-center justify-center overflow-hidden rounded-full border-4 border-white/85 bg-gradient-to-br from-[#25D366] via-[#14b856] to-[#00C853] shadow-[0_14px_30px_rgba(37,211,102,0.28)] ${
-                          visibleSelectedWaQrGroupsData.length > 0 ? 'h-24 w-24' : 'h-32 w-32'
-                        }`}>
-                          {visibleSelectedWaQrGroupsData.length === 1 && visibleSelectedWaQrGroupData?.avatarUrl ? (
-                            <img
-                              src={visibleSelectedWaQrGroupData.avatarUrl}
-                              alt={visibleSelectedWaQrGroupData.name || 'Grupo de WhatsApp'}
-                              className="h-full w-full object-cover"
-                            />
                           ) : (
-                            <WhatsAppIcon className={`${visibleSelectedWaQrGroupsData.length > 0 ? 'h-10 w-10' : 'h-14 w-14'} shrink-0 text-white`} />
+                            <div className="rounded-[1.25rem] border border-dashed border-slate-200 bg-white/60 px-4 py-6 text-center text-[15px] font-semibold text-slate-400">
+                              {isWaQrConnectionOpen ? 'No hay grupos que coincidan.' : 'Conecta WhatsApp QR para cargar tus grupos reales.'}
+                            </div>
                           )}
                         </div>
                       </div>
-                      {visibleSelectedWaQrGroupsData.length > 0 ? (
-                        <div className="mt-4 max-w-[15rem] rounded-[1.35rem] border border-white/80 bg-white/72 px-4 py-3 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] backdrop-blur-xl">
-                          <div className={`inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] ${visibleHasExportedWaQrGroup ? 'text-emerald-700' : 'text-sky-700'}`}>
-                            <span className={`h-2.5 w-2.5 rounded-full ${visibleHasExportedWaQrGroup ? 'bg-emerald-500' : 'bg-sky-500'}`} />
-                            {visibleHasExportedWaQrGroup ? 'Ya exportado' : 'Listo para exportar'}
-                          </div>
-                          <p className="mt-1.5 text-[13px] leading-4 text-slate-500">
-                            {visibleHasExportedWaQrGroup
-                              ? `${visibleExportedWaQrGroupCount} registros de los grupos seleccionados ya están en base.`
-                              : 'Aún no detectamos exportaciones previas de los grupos seleccionados.'}
-                          </p>
+
+                      <div className="rounded-[1.25rem] border border-dashed border-purple-200 bg-purple-50/30 p-4 transition-all duration-300">
+                        <button
+                          type="button"
+                          onClick={() => setIsExportedGroupsExpanded((prev) => !prev)}
+                          className="flex w-full items-center gap-2 text-[15px] font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                        >
+                          <ChevronRight className={`h-5 w-5 text-slate-400 transition-transform duration-300 ${isExportedGroupsExpanded ? 'rotate-90' : ''}`} />
+                          <span>Grupos exportados ({exportedWaQrGroups.length})</span>
+                        </button>
+                        
+                        <div className={`transition-all duration-300 overflow-hidden ${isExportedGroupsExpanded ? 'max-h-[30rem] opacity-100 mt-4' : 'max-h-0 opacity-0 m-0'}`}>
+                          {exportedWaQrGroups.length > 0 ? (
+                            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+                              {exportedWaQrGroups.map((group) => (
+                                 <div key={group.id} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white p-2">
+                                   <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-100 bg-slate-50">
+                                     {group.avatarUrl ? (
+                                       <img src={group.avatarUrl} alt={group.name} className="h-full w-full object-contain" />
+                                     ) : (
+                                       <WhatsAppIcon className="h-4 w-4 text-slate-400" />
+                                     )}
+                                   </span>
+                                   <div className="min-w-0 flex-1">
+                                     <span className="block truncate text-sm font-semibold text-slate-600">{group.name}</span>
+                                     <span className="block text-[11px] text-slate-400">{group.exportedCount} contactos</span>
+                                   </div>
+                                 </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center text-sm font-semibold text-slate-400 mt-2 mb-2">
+                              Aun no hay grupos extraídos.
+                            </div>
+                          )}
                         </div>
-                      ) : null}
+                      </div>
                     </div>
 
                     <div className="flex min-w-0 flex-col gap-3">

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { 
+import {
+  House,
   Users, 
   PlusCircle, 
   Sliders,
@@ -276,56 +277,19 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
   const [linkedProfileLabel, setLinkedProfileLabel] = useState('');
   const [qrFeedback, setQrFeedback] = useState('');
   const [isQrBusy, setIsQrBusy] = useState(false);
-  const [isMetaConfigOpen, setIsMetaConfigOpen] = useState(false);
-  const [isTestingMeta, setIsTestingMeta] = useState(false);
   const [metaNotice, setMetaNotice] = useState(null);
   const statusPollRef = useRef(null);
-  const metaConfigStorageKey = `${STORAGE_KEYS.metaApiConfig}:${currentUser?.workspaceId || currentUser?.id || 'guest'}`;
-  const [metaApiConfig, setMetaApiConfig] = usePersistentState(metaConfigStorageKey, {
-    accessToken: '',
-    phoneNumberId: '',
-    wabaId: '',
-  });
-  const [metaConfigDraft, setMetaConfigDraft] = useState(() => ({
-    accessToken: metaApiConfig?.accessToken || '',
-    phoneNumberId: metaApiConfig?.phoneNumberId || '',
-    wabaId: metaApiConfig?.wabaId || '',
-  }));
-  const [metaTestPhoneNumber, setMetaTestPhoneNumber] = useState('');
-  const isMetaConfigured = Boolean(
-    String(metaApiConfig?.accessToken || '').trim() &&
-    String(metaApiConfig?.phoneNumberId || '').trim() &&
-    String(metaApiConfig?.wabaId || '').trim(),
-  );
   const leftCardClass = isDarkMode
     ? 'border-white/10 bg-[linear-gradient(180deg,rgba(18,18,20,0.98),rgba(16,16,18,0.92))] text-white'
     : 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,250,252,0.96))] text-slate-900';
-  const rightCardClass = isDarkMode
-    ? 'border-white/10 bg-[linear-gradient(180deg,rgba(20,20,24,0.98),rgba(16,16,18,0.94))] text-white'
-    : 'border-slate-200/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,251,0.96))] text-slate-900';
   const softText = isDarkMode ? 'text-slate-300' : 'text-slate-600';
   const mutedText = isDarkMode ? 'text-slate-400' : 'text-slate-500';
-
-  useEffect(() => {
-    setMetaConfigDraft({
-      accessToken: metaApiConfig?.accessToken || '',
-      phoneNumberId: metaApiConfig?.phoneNumberId || '',
-      wabaId: metaApiConfig?.wabaId || '',
-    });
-  }, [metaApiConfig]);
 
   useEffect(() => {
     if (!metaNotice) return undefined;
     const timer = window.setTimeout(() => setMetaNotice(null), 2800);
     return () => window.clearTimeout(timer);
   }, [metaNotice]);
-
-  const benefits = [
-    'Verificación empresarial',
-    'Automatizaciones escalables',
-    'Sincronización con CRM',
-    'Plantillas aprobadas',
-  ];
   const getMissingSessionMessage = useCallback(() => {
     if (currentUser?.id) {
       return 'Esta cuenta no tiene token activo del backend.';
@@ -481,96 +445,6 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
     }
   }, [clearStatusPoll, getMissingSessionMessage, handleReloadQr, onVerifySession]);
 
-  const handleMetaDraftChange = useCallback((field, value) => {
-    setMetaConfigDraft((current) => ({
-      ...current,
-      [field]: value,
-    }));
-  }, []);
-
-  const handleSaveMetaConfig = useCallback(() => {
-    const nextConfig = {
-      accessToken: String(metaConfigDraft.accessToken || '').trim(),
-      phoneNumberId: String(metaConfigDraft.phoneNumberId || '').trim(),
-      wabaId: String(metaConfigDraft.wabaId || '').trim(),
-    };
-
-    setMetaApiConfig(nextConfig);
-    setMetaNotice({
-      tone: 'success',
-      title: 'Credenciales guardadas',
-      message: 'La configuración local de Meta quedó almacenada.',
-    });
-  }, [metaConfigDraft, setMetaApiConfig]);
-
-  const handleTestMetaConfig = useCallback(() => {
-    const nextConfig = {
-      accessToken: String(metaConfigDraft.accessToken || '').trim(),
-      phoneNumberId: String(metaConfigDraft.phoneNumberId || '').trim(),
-      wabaId: String(metaConfigDraft.wabaId || '').trim(),
-    };
-    const normalizedTestPhone = String(metaTestPhoneNumber || '').replace(/[^\d]/g, '').trim();
-
-    if (!nextConfig.accessToken || !nextConfig.phoneNumberId || !nextConfig.wabaId) {
-      setMetaNotice({
-        tone: 'warning',
-        title: 'Faltan credenciales',
-        message: 'Completa access token, phone number ID y WABA ID antes de probar la conexión.',
-      });
-      return;
-    }
-
-    if (!normalizedTestPhone) {
-      setMetaNotice({
-        tone: 'warning',
-        title: 'Falta número de prueba',
-        message: 'Agrega un número con código de país para enviar la plantilla hello_world.',
-      });
-      return;
-    }
-
-    setIsTestingMeta(true);
-
-    api
-      .sendMetaTestMessage({
-        accessToken: nextConfig.accessToken,
-        phoneNumberId: nextConfig.phoneNumberId,
-        wabaId: nextConfig.wabaId,
-        testPhoneNumber: normalizedTestPhone,
-      })
-      .then(() => {
-        setMetaNotice({
-          tone: 'success',
-          title: 'Conexión lista',
-          message: 'Conexión a Meta exitosa',
-        });
-      })
-      .catch((error) => {
-        const errorMessage =
-          error?.payload?.details
-          || error?.payload?.error
-          || error?.message
-          || 'No se pudo completar la prueba con Meta.';
-
-        setMetaNotice({
-          tone: 'warning',
-          title: 'Meta rechazó la prueba',
-          message: errorMessage,
-        });
-      })
-      .finally(() => {
-        setIsTestingMeta(false);
-      });
-  }, [metaConfigDraft, metaTestPhoneNumber]);
-
-  const handleCloseMetaConfig = useCallback(() => {
-    setMetaConfigDraft({
-      accessToken: metaApiConfig?.accessToken || '',
-      phoneNumberId: metaApiConfig?.phoneNumberId || '',
-      wabaId: metaApiConfig?.wabaId || '',
-    });
-    setIsMetaConfigOpen(false);
-  }, [metaApiConfig]);
 
   useEffect(() => {
     if (!sessionToken) {
@@ -784,224 +658,65 @@ function WhatsAppApiView({ isDarkMode = false, sessionToken = null, currentUser 
           </div>
         </div>
 
-        <div className="wa-connect-grid grid gap-4 xl:grid-cols-[1.14fr_0.86fr]">
-          <section className={`wa-connect-panel relative overflow-hidden rounded-[1.8rem] border p-5 shadow-[0_18px_42px_-30px_rgba(148,163,184,0.22)] sm:p-6 ${leftCardClass}`}>
-            <div className={`absolute -left-10 top-6 h-32 w-32 rounded-full blur-3xl ${isDarkMode ? 'bg-[#25D366]/10' : 'bg-emerald-100/80'}`}></div>
-            <div className={`absolute right-0 top-0 h-40 w-40 rounded-full blur-3xl ${isDarkMode ? 'bg-orange-500/8' : 'bg-orange-100/60'}`}></div>
+        <div className="mx-auto w-full max-w-4xl">
+          <section className={`wa-connect-panel relative overflow-hidden rounded-[2.2rem] border p-8 shadow-[0_24px_60px_-24px_rgba(148,163,184,0.3)] sm:p-10 ${leftCardClass}`}>
+            <div className={`absolute -left-10 top-6 h-40 w-40 rounded-full blur-3xl ${isDarkMode ? 'bg-[#25D366]/15' : 'bg-emerald-100/90'}`}></div>
+            <div className={`absolute right-0 bottom-0 h-48 w-48 rounded-full blur-3xl ${isDarkMode ? 'bg-orange-500/10' : 'bg-orange-100/70'}`}></div>
 
-            <div className="relative grid gap-6 xl:grid-cols-[0.38fr_0.62fr] xl:items-center">
-              <div className="flex max-w-md flex-col justify-center">
-                <div className="mb-3 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">
-                  <span className="inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_8px_18px_-12px_rgba(37,211,102,0.75)]">
+            <div className="relative grid gap-10 lg:grid-cols-[1fr_1.2fr] lg:items-center">
+              <div className="flex flex-col justify-center">
+                <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.2em] text-emerald-700 shadow-sm">
+                  <span className="inline-flex h-[20px] w-[20px] items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_8px_18px_-12px_rgba(37,211,102,0.85)]">
                     <WhatsAppIcon className="h-4 w-4 shrink-0" />
                   </span>
                   WhatsApp Web
                 </div>
-                <h2 className={`text-[1.8rem] font-black leading-tight sm:text-[2.4rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Web (QR)</h2>
-                <p className={`mt-2.5 max-w-xl text-sm leading-6 sm:text-[14px] ${softText}`}>
-                  Conecta tu dispositivo escaneando un código.
+                <h2 className={`text-[2rem] font-black leading-tight sm:text-[2.75rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
+                  WhatsApp Web (QR)
+                </h2>
+                <p className={`mt-4 text-base leading-relaxed ${softText}`}>
+                  Conecta tu dispositivo escaneando el código QR.
                 </p>
+                
+                <div className="mt-8 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100/80 text-emerald-600">
+                      <CheckCircle size={16} />
+                    </div>
+                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Conexión rápida e inmediata</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100/80 text-emerald-600">
+                      <CheckCircle size={16} />
+                    </div>
+                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Extracción de grupos</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100/80 text-emerald-600">
+                      <CheckCircle size={16} />
+                    </div>
+                    <span className={`text-sm font-semibold ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>Usa tu número personal o de negocio</span>
+                  </div>
+                </div>
               </div>
 
-              <div className={`wa-qr-wrapper mx-auto w-full max-w-[580px] rounded-[1.8rem] border p-3.5 sm:p-4 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
-                <div className="flex items-center justify-between gap-3 pb-3">
+              <div className={`wa-qr-wrapper mx-auto w-full rounded-[2rem] border p-5 sm:p-6 shadow-[0_20px_40px_-20px_rgba(0,0,0,0.05)] ${isDarkMode ? 'border-white/10 bg-white/[0.04]' : 'border-slate-200 bg-white/80 backdrop-blur-xl'}`}>
+                <div className="flex items-center justify-between gap-3 pb-4">
                   <div>
-                    <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${mutedText}`}>Escaneo QR</p>
-                    <p className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Vincula tu dispositivo</p>
+                    <p className={`text-[10px] font-black uppercase tracking-[0.25em] ${mutedText}`}>Escaneo QR</p>
+                    <p className={`text-base font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Vincula tu dispositivo</p>
                   </div>
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_24px_-16px_rgba(37,211,102,0.8)]">
-                    <WhatsAppIcon className="h-[21px] w-[21px] shrink-0" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#25D366] text-white shadow-[0_12px_24px_-12px_rgba(37,211,102,0.8)]">
+                    <WhatsAppIcon className="h-6 w-6 shrink-0" />
                   </div>
                 </div>
                 {renderQrContent()}
-                <div className={`mt-3 rounded-[1.1rem] border px-3 py-2.5 text-[11px] ${isDarkMode ? 'border-white/8 bg-white/[0.03] text-slate-300' : 'border-slate-100 bg-slate-50 text-slate-600'}`}>
+                <div className={`mt-4 rounded-[1.25rem] border px-4 py-3 text-xs text-center font-medium ${isDarkMode ? 'border-white/10 bg-white/[0.05] text-slate-300' : 'border-slate-100 bg-slate-50/80 text-slate-500'}`}>
                   Abre WhatsApp en tu teléfono y escanea este código.
                 </div>
               </div>
             </div>
           </section>
-
-          <section className={`wa-connect-panel relative overflow-hidden rounded-[1.8rem] border p-5 shadow-[0_18px_42px_-30px_rgba(148,163,184,0.22)] sm:p-6 ${rightCardClass}`}>
-            <div className={`absolute -right-8 top-10 h-32 w-32 rounded-full blur-3xl ${isDarkMode ? 'bg-violet-500/10' : 'bg-violet-100/70'}`}></div>
-            <div className="relative flex h-full flex-col gap-5">
-              <div>
-                <div className="mb-3 flex items-center gap-2.5">
-                  <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-violet-400/20 bg-violet-500/10 text-violet-300' : 'border-violet-100 bg-violet-50 text-violet-700'}`}>
-                    Recomendado
-                  </div>
-                  <div className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
-                    Oficial
-                  </div>
-                  <div className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${
-                    isMetaConfigured
-                      ? isDarkMode
-                        ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300'
-                        : 'border-emerald-100 bg-emerald-50 text-emerald-700'
-                      : isDarkMode
-                        ? 'border-slate-500/20 bg-white/[0.05] text-slate-300'
-                        : 'border-slate-200 bg-white text-slate-500'
-                  }`}>
-                    {isMetaConfigured ? 'Configurado' : 'No configurado'}
-                  </div>
-                </div>
-                <h2 className={`text-[1.8rem] font-black leading-tight sm:text-[2.35rem] ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>WhatsApp Business API</h2>
-                <p className={`mt-2.5 max-w-none text-sm leading-6 sm:text-[14px] ${softText}`}>
-                  Conexión oficial para empresas. Requiere Facebook Business.
-                </p>
-              </div>
-
-              <div className={`rounded-[1.5rem] border p-4 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50/80'}`}>
-                <div className="grid gap-2.5 sm:grid-cols-2">
-                  {benefits.map((item) => (
-                    <div key={item} className={`flex items-center gap-2.5 rounded-[1.1rem] px-3 py-2.5 text-[12px] font-medium leading-5 ${isDarkMode ? 'bg-white/[0.04] text-slate-200' : 'bg-white text-slate-700 shadow-[0_8px_24px_-18px_rgba(15,23,42,0.22)]'}`}>
-                      <CheckCircle size={15} className="text-emerald-500" />
-                      <span>{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsMetaConfigOpen(true)}
-                  className="inline-flex items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-[18px] py-2.5 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
-                >
-                  {isMetaConfigured ? 'Modificar Configuración' : 'Configurar API Oficial'}
-                </button>
-                <div className={`flex items-center gap-2 text-[13px] ${mutedText}`}>
-                  <Lock size={15} />
-                  Requiere acceso de Facebook Business
-                </div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <div className={`pointer-events-none fixed inset-0 z-40 transition-all duration-300 ${isMetaConfigOpen ? 'opacity-100' : 'opacity-0'}`}>
-          <div
-            className={`absolute inset-0 bg-slate-950/35 backdrop-blur-[2px] transition-opacity duration-300 ${isMetaConfigOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}
-            onClick={handleCloseMetaConfig}
-          />
-          <aside
-            className={`pointer-events-auto absolute right-0 top-0 h-full w-full max-w-[30rem] transform transition-transform duration-300 ease-out ${isMetaConfigOpen ? 'translate-x-0' : 'translate-x-full'}`}
-          >
-            <div className={`relative h-full overflow-y-auto border-l p-5 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.65)] backdrop-blur-3xl sm:p-6 ${
-              isDarkMode
-                ? 'border-white/10 bg-[linear-gradient(180deg,rgba(12,12,16,0.96),rgba(10,10,14,0.94))] text-white'
-                : 'border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(248,250,252,0.88))] text-slate-900'
-            }`}>
-              <div className="absolute -left-10 top-16 h-32 w-32 rounded-full bg-[#25D366]/12 blur-[80px]"></div>
-              <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-[#FF5A1F]/14 blur-[90px]"></div>
-
-              <div className="relative">
-                <div className="mb-5 flex items-start justify-between gap-3">
-                  <div>
-                    <div className={`mb-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${isDarkMode ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-300' : 'border-emerald-100 bg-emerald-50 text-emerald-700'}`}>
-                      <span className="h-2 w-2 rounded-full bg-[#25D366]" />
-                      Meta API
-                    </div>
-                    <h2 className={`text-[1.75rem] font-black leading-tight ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>Configurar API Oficial</h2>
-                    <p className={`mt-2 max-w-md text-sm leading-6 ${softText}`}>
-                      Guarda tus credenciales y prueba la integración oficial enviando la plantilla base de Meta a un número real.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCloseMetaConfig}
-                    className={`inline-flex h-10 w-10 items-center justify-center rounded-full transition-all ${isDarkMode ? 'bg-white/6 text-slate-300 hover:bg-white/10 hover:text-white' : 'bg-white/80 text-slate-500 hover:bg-white hover:text-slate-700'}`}
-                    aria-label="Cerrar configuración Meta"
-                  >
-                    <X size={17} />
-                  </button>
-                </div>
-
-                <div className={`rounded-[1.5rem] border p-4 ${isDarkMode ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-white/70'}`}>
-                  <div className="space-y-4">
-                    <label className="block">
-                      <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>Token de Acceso</span>
-                      <input
-                        type="password"
-                        value={metaConfigDraft.accessToken}
-                        onChange={(event) => handleMetaDraftChange('accessToken', event.target.value)}
-                        placeholder="Ingresa tu access token"
-                        className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>ID del Número de Teléfono</span>
-                      <input
-                        type="password"
-                        value={metaConfigDraft.phoneNumberId}
-                        onChange={(event) => handleMetaDraftChange('phoneNumberId', event.target.value)}
-                        placeholder="Ingresa el phoneNumberId"
-                        className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
-                      />
-                    </label>
-
-                    <label className="block">
-                      <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>ID de la Cuenta de WhatsApp Business</span>
-                      <input
-                        type="password"
-                        value={metaConfigDraft.wabaId}
-                        onChange={(event) => handleMetaDraftChange('wabaId', event.target.value)}
-                        placeholder="Ingresa el wabaId"
-                        className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className={`mt-4 rounded-[1.2rem] border px-4 py-3 text-xs leading-6 ${isDarkMode ? 'border-white/10 bg-white/[0.03] text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-600'}`}>
-                  Esta configuración se guarda en tu navegador dentro del workspace actual. La prueba envía la plantilla oficial <span className="font-black">hello_world</span> al número que indiques.
-                </div>
-
-                <div className="mt-5">
-                  <label className="block">
-                    <span className={`mb-2 block text-[11px] font-black uppercase tracking-[0.18em] ${mutedText}`}>Número de prueba</span>
-                    <input
-                      type="tel"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      value={metaTestPhoneNumber}
-                      onChange={(event) => setMetaTestPhoneNumber(event.target.value)}
-                      placeholder="Con código de país, ej: 5213312345678"
-                      className={`w-full rounded-[1rem] border px-4 py-3 text-sm outline-none transition-all ${isDarkMode ? 'border-white/10 bg-white/[0.035] text-white placeholder:text-slate-500 focus:border-[#25D366]/40' : 'border-slate-200 bg-white/80 text-slate-900 placeholder:text-slate-400 focus:border-[#25D366]/40'}`}
-                    />
-                  </label>
-                </div>
-
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-                  <button
-                    type="button"
-                    onClick={handleSaveMetaConfig}
-                    className="inline-flex flex-1 items-center justify-center rounded-full bg-[linear-gradient(135deg,#FF3C00,#FF7A00_60%,#FFB36B)] px-5 py-3 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(255,90,31,0.6)] transition-transform hover:-translate-y-0.5"
-                  >
-                    Guardar Credenciales
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleTestMetaConfig}
-                    disabled={isTestingMeta}
-                    className="inline-flex flex-1 items-center justify-center rounded-full bg-[#25D366] px-5 py-3 text-sm font-black text-white shadow-[0_16px_32px_-18px_rgba(37,211,102,0.7)] transition-transform hover:-translate-y-0.5 hover:bg-[#22c55e] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isTestingMeta ? 'Probando...' : 'Probar Conexión'}
-                  </button>
-                </div>
-
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleCloseMetaConfig}
-                    className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-black uppercase tracking-[0.18em] transition-all ${isDarkMode ? 'bg-white/6 text-slate-300 hover:bg-white/10 hover:text-white' : 'bg-white/80 text-slate-500 hover:bg-white hover:text-slate-700'}`}
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </aside>
         </div>
 
         <style dangerouslySetInnerHTML={{ __html: `
@@ -1512,6 +1227,7 @@ export default function App() {
   };
 
   const mobilePrimaryNav = [
+    { id: 'home', label: t('nav_home'), icon: <House size={18} />, isActive: activeTab === 'home', onClick: () => setActiveTab('home') },
     { id: 'whatsapp-api', label: 'WhatsApp API', icon: <WhatsAppIcon className="h-[22px] w-[22px] shrink-0" />, isActive: activeTab === 'whatsapp-api', onClick: () => setActiveTab('whatsapp-api') },
     { id: 'add', label: t('nav_add'), icon: <PlusCircle size={18} />, isActive: activeTab === 'add', onClick: () => setActiveTab('add') },
     { id: 'database', label: t('nav_dir'), icon: <Users size={18} />, isActive: activeTab === 'database', onClick: () => { setActiveTab('database'); setDbSearchTerm(''); } },
@@ -1683,6 +1399,7 @@ export default function App() {
         </div>
 
         <nav className="mt-5 flex-1 space-y-1.5 px-0 overflow-y-auto no-scrollbar">
+          <NavItem icon={<House size={20} />} label={t('nav_home')} active={activeTab === 'home'} onClick={() => setActiveTab('home')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<WhatsAppIcon className="h-[25px] w-[25px] shrink-0" />} label="WhatsApp API" active={activeTab === 'whatsapp-api'} onClick={() => setActiveTab('whatsapp-api')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<PlusCircle size={20} />} label={t('nav_add')} active={activeTab === 'add'} onClick={() => setActiveTab('add')} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
           <NavItem icon={<Users size={20} />} label={t('nav_dir')} active={activeTab === 'database'} onClick={() => { setActiveTab('database'); setDbSearchTerm(''); }} isDarkMode={isDarkMode} collapsed={isSidebarCollapsed} />
@@ -1845,7 +1562,7 @@ export default function App() {
       </main>
 
         <div className={`lg:hidden fixed inset-x-0 bottom-0 z-40 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2 backdrop-blur-xl ${isDarkMode ? 'border-t border-white/10 bg-[#050505]/94' : 'border-t border-slate-200/70 bg-white/90'}`}>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {mobilePrimaryNav.map((item) => (
               <button
                 key={item.id}
